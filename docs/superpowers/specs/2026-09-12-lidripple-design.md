@@ -91,8 +91,23 @@ lidripple differentiates on four specific axes:
 
 **Hardware reference** (from `samhenrigold/LidAngleSensor`, `tcsenpai/pybooklid`, and
 macTilt): Apple internal lid angle sensor, `IOHIDDevice` VID `0x05AC`, PID `0x8104`,
-usage page `0x0020` (sensor), usage `0x008A` (orientation), 16-bit values at 0.01°
-precision over a 0–360° range, polled at 60 Hz.
+usage page `0x0020` (sensor), usage `0x008A` (orientation), read via a Feature report
+(report ID 1, 8-byte buffer, little-endian UInt16 at bytes 1–2), polled at 60 Hz.
+
+The raw-to-degrees scale was originally assumed to be 0.01° precision (a 16-bit value
+scaled down), matching the reference implementations' stated fidelity. Task 2's hardware
+investigation on this plan's test machine (Mac16,12) found evidence against that: with
+the lid physically open (`ioreg -r -k AppleClamshellState` reporting
+`AppleClamshellState = No`), the sensor steadily reported raw value `0x0063` = 99 over
+300 samples. An open lid cannot be at 0.99°, which rules out the 0.01° scale and
+corroborates the unscaled mapping actually shipped in
+`Sources/LidRippleSensor/HIDAngleSource.swift` (`rawToDegrees = 1.0`, i.e. 1 LSB = 1°,
+whole degrees reported directly). See `docs/sensor.md` for the full write-up.
+
+This is corroboration, not confirmation: it has NOT been verified by a full physical
+sweep across known angles (closed, and several angles in between). That sweep still
+requires a human's hands and is outstanding work for whoever picks up sensor tuning
+next.
 
 ---
 

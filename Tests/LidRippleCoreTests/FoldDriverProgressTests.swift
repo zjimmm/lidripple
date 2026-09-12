@@ -123,6 +123,53 @@ private func sweepTrackingPeak(
     #expect(driver.state.progress == 0)
 }
 
+@Test func signalSleepDuringScriptedUnfoldStaysSealedOnNextTick() {
+    let driver = FoldDriver()
+    driver.signalSleep()
+    driver.beginScriptedUnfold(now: 100)
+    driver.tick(now: 100.1)
+    #expect(driver.state.phase == .unfolding)
+
+    // Sleep interrupts the scripted unfold; it must report sealed immediately...
+    let sealed = driver.signalSleep()
+    #expect(sealed.phase == .sealed)
+    #expect(sealed.progress == 1.0)
+
+    // ...and the seal must hold on the next tick, rather than the leftover
+    // scriptedUnfoldStart resurrecting the unfold and dropping back to idle.
+    let after = driver.tick(now: 101.0)
+    #expect(after.phase == .sealed)
+    #expect(after.progress == 1.0)
+}
+
+@Test func ingestDuringScriptedUnfoldTracksRealAngleInsteadOfCorruptingProgress() {
+    let driver = FoldDriver()
+    driver.signalSleep()
+    var now = 100.0
+    driver.beginScriptedUnfold(now: now)
+
+    // Let the scripted curve run partway.
+    now += 0.2
+    let before = driver.tick(now: now).progress
+    #expect(before > 0 && before < 1)
+
+    // A real angle sample arrives mid-unfold (e.g. the lid is already fully
+    // open). Progress must continue smoothly toward 0 from wherever the
+    // scripted curve left off -- not jump backward past 0 and snap back up,
+    // the way the pre-fix bug did (0.930 -> 0.476 -> 0.643 on one sample).
+    var previous = before
+    var sawIncrease = false
+    for _ in 0..<40 {
+        now += 1 / 60.0
+        let p = driver.ingest(AngleSample(degrees: 130, timestamp: now)).progress
+        if p > previous + 1e-9 { sawIncrease = true }
+        previous = p
+    }
+    #expect(!sawIncrease, "progress must not increase while the real angle stays fully open")
+    #expect(driver.state.phase == .idle)
+    #expect(driver.state.progress == 0)
+}
+
 @Test func velocityIsReportedAndOppositelySignedInEachDirection() {
     let driver = FoldDriver()
     let (_, t) = sweepTrackingPeak(driver, from: 120, to: 50, degreesPerSecond: 200, startingAt: 0)

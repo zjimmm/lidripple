@@ -9,7 +9,7 @@ lidripple-trace — lid angle sensor tool
 USAGE:
   lidripple-trace probe
   lidripple-trace record [--name NAME] [--out PATH]
-  lidripple-trace replay PATH [--speed N]
+  lidripple-trace replay PATH
   lidripple-trace info PATH
 
   probe    Report whether this Mac has a lid angle sensor, then stream angles.

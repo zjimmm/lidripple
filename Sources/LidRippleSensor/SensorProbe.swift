@@ -65,7 +65,7 @@ public enum SensorProbe {
         // kIOHIDPrimaryUsageKey. IOHIDManagerSetDeviceMatching accepts these
         // bare keys for device-level filtering too, undocumented as such;
         // this was validated empirically against real Mac16,12 hardware
-        // (see task-2-report.md) and matches the approach used by the
+        // (see docs/sensor.md) and matches the approach used by the
         // reference implementation cited by the spec
         // (github.com/samhenrigold/LidAngleSensor). Do not "correct" these
         // to the Device-prefixed constants — that silently breaks matching.

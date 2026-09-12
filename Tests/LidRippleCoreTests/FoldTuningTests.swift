@@ -52,6 +52,13 @@ import Foundation
     #expect(FoldTuning.default.withIntensity(9.0).intensity == 1.0)
 }
 
+@Test func withIntensityScalesFromCurrentValuesNotHardcodedDefaults() throws {
+    var t = FoldTuning.default
+    try t.apply(overrides: ["blurRadiusPx": 40])
+    let scaled = t.withIntensity(0.5)
+    #expect(scaled.blurRadiusPx == 20)  // 40 * 0.5, not FoldTuning.default.blurRadiusPx * 0.5
+}
+
 @Test func partialOverridesLeaveEverythingElseAtDefault() throws {
     var t = FoldTuning.default
     try t.apply(overrides: ["stiffness": 300, "blurRadiusPx": 40])

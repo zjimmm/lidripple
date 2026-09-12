@@ -34,6 +34,17 @@ public final class FoldDriver {
 
     @discardableResult
     public func ingest(_ sample: AngleSample) -> FoldState {
+        if scriptedUnfoldStart != nil {
+            // A real angle sample arrived while a scripted (angle-free) unfold
+            // was in progress. `publish()` has no awareness of the scripted
+            // curve, so letting both drive the spring/progress at once
+            // corrupts it (see the final-review fix wave notes). The safest
+            // behavior is to let the real angle take over: drop the scripted
+            // unfold and fall through to the normal phase-machine path, which
+            // continues from `.unfolding` (set by `beginScriptedUnfold`)
+            // tracking the genuine angle from here on.
+            scriptedUnfoldStart = nil
+        }
         let angle = filter.process(sample)
         let velocity = filter.velocity
         let dt = lastTimestamp.map { max(sample.timestamp - $0, 0) } ?? 0
@@ -48,6 +59,10 @@ public final class FoldDriver {
     public func signalSleep() -> FoldState {
         phase = .sealed
         spring.reset(to: 1.0)
+        // Clear any in-flight scripted unfold: otherwise the next `tick(now:)`
+        // would still take the `scriptedUnfoldStart` branch and drive `phase`
+        // back out of `.sealed`, undoing the seal.
+        scriptedUnfoldStart = nil
         state = FoldState(phase: .sealed, progress: 1.0, velocity: 0)
         return state
     }

@@ -68,9 +68,9 @@ public struct FoldTuning: Codable, Equatable, Sendable {
         let clamped = min(max(intensity, 0.5), 1.0)
         var copy = self
         copy.intensity = clamped
-        copy.blurRadiusPx = FoldTuning.default.blurRadiusPx * clamped
-        copy.rotationDegrees = FoldTuning.default.rotationDegrees * clamped
-        copy.squashExponentGain = FoldTuning.default.squashExponentGain * clamped
+        copy.blurRadiusPx = self.blurRadiusPx * clamped
+        copy.rotationDegrees = self.rotationDegrees * clamped
+        copy.squashExponentGain = self.squashExponentGain * clamped
         return copy
     }
 

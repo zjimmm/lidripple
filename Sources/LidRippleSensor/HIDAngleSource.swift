@@ -103,7 +103,7 @@ public final class HIDAngleSource: LidAngleSource, @unchecked Sendable {
             // IOHIDDeviceCopyMatchingElements/IOHIDDeviceGetValue) — it now
             // means at least one candidate device opened successfully, but
             // none of them returned a valid report when probed. See
-            // task-2-report.md for the investigation behind this.
+            // docs/sensor.md for the investigation behind this.
             throw anyOpened ? HIDAngleSourceError.elementNotFound : HIDAngleSourceError.openFailed(lastOpenStatus)
         }
 
