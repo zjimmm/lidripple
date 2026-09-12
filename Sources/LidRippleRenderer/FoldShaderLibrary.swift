@@ -63,18 +63,10 @@ enum FoldShaderLibrary {
         return output;
     }
 
-    static float foldNoise(float2 pixel) {
-        // The difference of two decorrelated hashes removes low-frequency bias
-        // and leaves energy concentrated at pixel frequency for dark-gradient
-        // dither. It is fixed in screen space so still frames do not shimmer.
-        const float a = fract(sin(dot(pixel, float2(12.9898f, 78.233f))) * 43758.5453f);
-        const float b = fract(sin(dot(pixel + 19.19f, float2(39.3468f, 11.135f))) * 24634.6345f);
-        return (a - b) * 0.5f;
-    }
-
     fragment float4 foldFragment(
         FoldVaryings input [[stage_in]],
         texture2d<float> source [[texture(0)]],
+        texture2d<float, access::read> blueNoise [[texture(1)]],
         sampler sourceSampler [[sampler(0)]],
         constant FoldUniforms &uniforms [[buffer(1)]])
     {
@@ -124,8 +116,10 @@ enum FoldShaderLibrary {
         const float vignette = smoothstep(0.35f, 1.25f, length(centered));
         color.rgb *= 1.0f - uniforms.finish.z * progress * vignette;
 
-        const float2 pixel = input.position.xy;
-        color.rgb += foldNoise(pixel) * uniforms.finish.w * progress;
+        const uint2 noiseCoordinate = uint2(input.position.xy)
+            % uint2(blueNoise.get_width(), blueNoise.get_height());
+        const float dither = blueNoise.read(noiseCoordinate).r - 0.5f;
+        color.rgb += dither * uniforms.finish.w * progress;
         return float4(clamp(color.rgb, 0.0f, 1.0f), color.a);
     }
 

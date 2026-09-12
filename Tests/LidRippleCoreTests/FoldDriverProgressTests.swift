@@ -34,7 +34,7 @@ private func sweepTrackingPeak(
 @Test func aFullSlowCloseReachesFullProgress() {
     let driver = FoldDriver()
     // 40 deg/s is the spec's viscous case.
-    sweepTrackingPeak(driver, from: 120, to: 15, degreesPerSecond: 40, startingAt: 0)
+    _ = sweepTrackingPeak(driver, from: 120, to: 15, degreesPerSecond: 40, startingAt: 0)
     #expect(driver.state.progress > 0.99)
 }
 
@@ -58,8 +58,8 @@ private func sweepTrackingPeak(
     // sweep's accumulated progress regardless of feed-forward magnitude,
     // since the spring's output is bounded by elapsed integration time —
     // see the task report for the full analysis.)
-    sweepTrackingPeak(withFeedForward, from: 120, to: 50, degreesPerSecond: 400, startingAt: 0)
-    sweepTrackingPeak(withoutFeedForward, from: 120, to: 50, degreesPerSecond: 400, startingAt: 0)
+    _ = sweepTrackingPeak(withFeedForward, from: 120, to: 50, degreesPerSecond: 400, startingAt: 0)
+    _ = sweepTrackingPeak(withoutFeedForward, from: 120, to: 50, degreesPerSecond: 400, startingAt: 0)
     #expect(withFeedForward.state.progress > withoutFeedForward.state.progress)
 }
 
@@ -174,6 +174,6 @@ private func sweepTrackingPeak(
     let driver = FoldDriver()
     let (_, t) = sweepTrackingPeak(driver, from: 120, to: 50, degreesPerSecond: 200, startingAt: 0)
     #expect(driver.state.velocity > 0)      // folding: progress increasing
-    sweepTrackingPeak(driver, from: 50, to: 70, degreesPerSecond: 200, startingAt: t)
+    _ = sweepTrackingPeak(driver, from: 50, to: 70, degreesPerSecond: 200, startingAt: t)
     #expect(driver.state.velocity < 0)      // unfolding: progress decreasing
 }

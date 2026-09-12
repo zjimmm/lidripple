@@ -130,6 +130,7 @@ public final class FoldMetalView: MTKView, MTKViewDelegate, FoldPresentation {
         guard hasSource, let drawable = currentDrawable else { return }
         guard let commandBuffer = commandQueue.makeCommandBuffer() else {
             lastRenderError = RendererError.commandBufferCreationFailed
+            isPaused = true
             return
         }
 
@@ -143,6 +144,7 @@ public final class FoldMetalView: MTKView, MTKViewDelegate, FoldPresentation {
             commandBuffer.commit()
         } catch {
             lastRenderError = error
+            isPaused = true
         }
     }
 

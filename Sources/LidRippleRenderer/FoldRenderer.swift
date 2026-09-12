@@ -21,6 +21,7 @@ public final class FoldRenderer {
     private let indexBuffer: any MTLBuffer
     private let indexCount: Int
     private let sampler: any MTLSamplerState
+    private let blueNoise: any MTLTexture
     private let uniformBuffers: [any MTLBuffer]
     private let inFlightSemaphore = DispatchSemaphore(value: 3)
     private let stateLock = NSLock()
@@ -109,6 +110,7 @@ public final class FoldRenderer {
             throw RendererError.bufferAllocationFailed
         }
         self.sampler = sampler
+        blueNoise = try BlueNoise.makeTexture(device: device)
 
         var uniformBuffers: [any MTLBuffer] = []
         uniformBuffers.reserveCapacity(3)
@@ -223,6 +225,7 @@ public final class FoldRenderer {
         encoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
         encoder.setVertexBuffer(uniformBuffer, offset: 0, index: 1)
         encoder.setFragmentTexture(pyramid.texture, index: 0)
+        encoder.setFragmentTexture(blueNoise, index: 1)
         encoder.setFragmentSamplerState(sampler, index: 0)
         encoder.setFragmentBuffer(uniformBuffer, offset: 0, index: 1)
         encoder.drawIndexedPrimitives(
