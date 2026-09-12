@@ -16,7 +16,7 @@ import LidRippleCore
 
 @Test func progressZeroIsAFullScreenSourceIdentity() throws {
     let context = try RendererTestContext()
-    let sourceBytes = checkerboardGradient(width: 64, height: 40)
+    let sourceBytes = SyntheticFrame.checkerboardGradientBytes(width: 64, height: 40)
     let source = try context.makeTexture(width: 64, height: 40, bytes: sourceBytes)
     try context.renderer.setSource(texture: source)
 
@@ -88,94 +88,6 @@ import LidRippleCore
     let commandBuffer = try #require(context.commandQueue.makeCommandBuffer())
 
     #expect(try context.renderer.render(progress: 0.5, to: target, commandBuffer: commandBuffer) == false)
-}
-
-private final class RendererTestContext {
-    let device: any MTLDevice
-    let commandQueue: any MTLCommandQueue
-    let renderer: FoldRenderer
-
-    init(tuning: FoldTuning = .default) throws {
-        device = try #require(MTLCreateSystemDefaultDevice())
-        commandQueue = try #require(device.makeCommandQueue())
-        renderer = try FoldRenderer(device: device, tuning: tuning)
-    }
-
-    func makeTexture(width: Int, height: Int, bytes: [UInt8]) throws -> any MTLTexture {
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .bgra8Unorm,
-            width: width,
-            height: height,
-            mipmapped: false
-        )
-        descriptor.storageMode = .shared
-        descriptor.usage = [.shaderRead]
-        let texture = try #require(device.makeTexture(descriptor: descriptor))
-        texture.replace(
-            region: MTLRegionMake2D(0, 0, width, height),
-            mipmapLevel: 0,
-            withBytes: bytes,
-            bytesPerRow: width * 4
-        )
-        return texture
-    }
-
-    func makeSolidTexture(
-        width: Int,
-        height: Int,
-        bgra: [UInt8]
-    ) throws -> any MTLTexture {
-        try makeTexture(
-            width: width,
-            height: height,
-            bytes: Array(repeating: bgra, count: width * height).flatMap { $0 }
-        )
-    }
-
-    func makeTarget(width: Int, height: Int) throws -> any MTLTexture {
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .bgra8Unorm,
-            width: width,
-            height: height,
-            mipmapped: false
-        )
-        descriptor.storageMode = .shared
-        descriptor.usage = [.renderTarget, .shaderRead]
-        return try #require(device.makeTexture(descriptor: descriptor))
-    }
-
-    func render(progress: Double, width: Int, height: Int) throws -> [UInt8] {
-        let target = try makeTarget(width: width, height: height)
-        let commandBuffer = try #require(commandQueue.makeCommandBuffer())
-        #expect(try renderer.render(progress: progress, to: target, commandBuffer: commandBuffer))
-        commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
-        #expect(commandBuffer.status == .completed)
-
-        var bytes = [UInt8](repeating: 0, count: width * height * 4)
-        target.getBytes(
-            &bytes,
-            bytesPerRow: width * 4,
-            from: MTLRegionMake2D(0, 0, width, height),
-            mipmapLevel: 0
-        )
-        return bytes
-    }
-}
-
-private func checkerboardGradient(width: Int, height: Int) -> [UInt8] {
-    var bytes = [UInt8](repeating: 0, count: width * height * 4)
-    for y in 0..<height {
-        for x in 0..<width {
-            let offset = (y * width + x) * 4
-            let checker = ((x / 8) + (y / 8)).isMultiple(of: 2) ? 36 : 0
-            bytes[offset] = UInt8(min(255, x * 255 / max(width - 1, 1) + checker))
-            bytes[offset + 1] = UInt8(min(255, y * 255 / max(height - 1, 1) + checker))
-            bytes[offset + 2] = UInt8(min(255, (x + y) * 127 / max(width + height - 2, 1) + checker))
-            bytes[offset + 3] = 255
-        }
-    }
-    return bytes
 }
 
 private func warmBlackPixelCount(_ bytes: [UInt8]) -> Int {

@@ -43,7 +43,8 @@ let package = Package(
         ),
         .testTarget(
             name: "LidRippleRendererTests",
-            dependencies: ["LidRippleRenderer"]
+            dependencies: ["LidRippleRenderer"],
+            resources: [.process("Goldens")]
         ),
     ]
 )
