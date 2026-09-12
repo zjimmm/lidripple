@@ -2,7 +2,13 @@ import Foundation
 import LidRippleCore
 
 /// Accumulates live samples into a `Trace`.
-public final class TraceRecorder {
+///
+/// `@unchecked Sendable`: all mutable state (`samples`) is guarded by `lock`,
+/// the same pattern `HIDAngleSource` uses for the same reason — the CLI's
+/// `record` command captures this recorder in the `@Sendable` handler closure
+/// passed to `LidAngleSource.start(_:)`, which runs on the sensor's polling
+/// queue rather than the caller's thread.
+public final class TraceRecorder: @unchecked Sendable {
     private let name: String
     private let deviceModel: String
     private let lock = NSLock()
