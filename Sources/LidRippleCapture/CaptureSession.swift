@@ -42,7 +42,11 @@ final class ScreenCaptureSession: NSObject, CaptureSession, SCStreamDelegate, @u
     }
 
     func start() async throws {
-        let alreadyStarted = stateLock.withLock { self.stream != nil }
+        let alreadyStarted = stateLock.withLock {
+            guard self.stream == nil else { return true }
+            terminalError = nil
+            return false
+        }
         guard !alreadyStarted else { return }
 
         let content = try await SCShareableContent.current
@@ -73,7 +77,6 @@ final class ScreenCaptureSession: NSObject, CaptureSession, SCStreamDelegate, @u
         stateLock.withLock {
             self.receiver = receiver
             self.stream = stream
-            terminalError = nil
         }
     }
 
