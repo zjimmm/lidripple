@@ -1,2 +1,6 @@
-// Filled in by Task 4.
-print("lidripple-app: not implemented yet")
+import AppKit
+
+let app = NSApplication.shared
+let delegate = AppDelegate()
+app.delegate = delegate
+app.run()
