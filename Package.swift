@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "LidRippleOverlay", targets: ["LidRippleOverlay"]),
         .library(name: "LidRippleCapture", targets: ["LidRippleCapture"]),
         .library(name: "LidRippleRenderer", targets: ["LidRippleRenderer"]),
+        .executable(name: "lidripple-preview", targets: ["lidripple-preview"]),
     ],
     targets: [
         .target(name: "LidRippleCore"),
@@ -48,6 +49,10 @@ let package = Package(
             name: "LidRippleRendererTests",
             dependencies: ["LidRippleRenderer"],
             resources: [.process("Goldens")]
+        ),
+        .executableTarget(
+            name: "lidripple-preview",
+            dependencies: ["LidRippleCore", "LidRippleOverlay", "LidRippleRenderer"]
         ),
     ]
 )

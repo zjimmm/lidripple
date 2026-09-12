@@ -90,6 +90,23 @@ import LidRippleCore
     #expect(try context.renderer.render(progress: 0.5, to: target, commandBuffer: commandBuffer) == false)
 }
 
+@Test func tuningHotReloadDoesNotRebuildTheSourcePyramid() throws {
+    let context = try RendererTestContext()
+    let source = try context.makeSolidTexture(width: 32, height: 20, bgra: [180, 180, 180, 255])
+    try context.renderer.setSource(texture: source)
+    let before = try context.render(progress: 0.5, width: 32, height: 20)
+
+    var tuning = FoldTuning.default
+    tuning.voidSpeed = 0.4
+    tuning.rimIntensity = 0
+    context.renderer.updateTuning(tuning)
+    let after = try context.render(progress: 0.5, width: 32, height: 20)
+
+    #expect(before != after)
+    #expect(context.renderer.tuning == tuning)
+    #expect(context.renderer.pyramidBuildCount == 1)
+}
+
 private func warmBlackPixelCount(_ bytes: [UInt8]) -> Int {
     stride(from: 0, to: bytes.count, by: 4).reduce(into: 0) { count, offset in
         if bytes[offset] < 8, bytes[offset + 1] < 8, bytes[offset + 2] < 8 {

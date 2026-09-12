@@ -109,6 +109,17 @@ public final class FoldMetalView: MTKView, MTKViewDelegate, FoldPresentation {
         isPaused = true
     }
 
+    public func updateTuning(_ tuning: FoldTuning) {
+        foldRenderer.updateTuning(tuning)
+        clearColor = MTLClearColor(
+            red: tuning.warmBlackRed,
+            green: tuning.warmBlackGreen,
+            blue: tuning.warmBlackBlue,
+            alpha: 1
+        )
+        if hasSource { draw() }
+    }
+
     public func update(_ state: FoldState) {
         phase = state.phase
         progress = state.progress

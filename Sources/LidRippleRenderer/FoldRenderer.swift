@@ -8,7 +8,11 @@ import LidRippleCore
 /// one uniform write and one indexed draw.
 public final class FoldRenderer {
     public let device: any MTLDevice
-    public let tuning: FoldTuning
+    public var tuning: FoldTuning {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return currentTuning
+    }
 
     private let commandQueue: any MTLCommandQueue
     private let renderPipeline: any MTLRenderPipelineState
@@ -20,6 +24,7 @@ public final class FoldRenderer {
     private let uniformBuffers: [any MTLBuffer]
     private let inFlightSemaphore = DispatchSemaphore(value: 3)
     private let stateLock = NSLock()
+    private var currentTuning: FoldTuning
     private var nextUniformBuffer = 0
     private var pyramid: TexturePyramid?
     private(set) var pyramidBuildCount = 0
@@ -33,7 +38,7 @@ public final class FoldRenderer {
 
     public init(device: any MTLDevice, tuning: FoldTuning = .default) throws {
         self.device = device
-        self.tuning = tuning
+        currentTuning = tuning
 
         guard let commandQueue = device.makeCommandQueue() else {
             throw RendererError.commandQueueCreationFailed
@@ -147,6 +152,14 @@ public final class FoldRenderer {
         stateLock.unlock()
     }
 
+    /// Replaces only the data used to build future frame uniforms. Pipelines,
+    /// mesh buffers, and the one-capture texture pyramid remain untouched.
+    public func updateTuning(_ tuning: FoldTuning) {
+        stateLock.lock()
+        currentTuning = tuning
+        stateLock.unlock()
+    }
+
     /// Encodes one frame into `target`. The caller owns command-buffer commit and
     /// presentation. Returns false without encoding when no source is installed.
     @discardableResult
@@ -167,6 +180,7 @@ public final class FoldRenderer {
             stateLock.unlock()
             return false
         }
+        let tuning = currentTuning
         stateLock.unlock()
 
         inFlightSemaphore.wait()
