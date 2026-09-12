@@ -29,9 +29,11 @@ import AppKit
 }
 
 @Test @MainActor func coversTheGivenScreensEntireFrame() {
-    guard let screen = NSScreen.main else { return }
-    let window = OverlayWindow(screen: screen)
-    #expect(window.frame == screen.frame)
+    for screen in NSScreen.screens {
+        let window = OverlayWindow(screen: screen)
+        #expect(window.frame == screen.frame)
+        #expect(window.screen == screen)
+    }
 }
 
 @Test @MainActor func isNotReleasedWhenClosed() {

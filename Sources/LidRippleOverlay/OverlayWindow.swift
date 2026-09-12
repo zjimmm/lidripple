@@ -6,6 +6,9 @@ import AppKit
 /// chrome (title bar, shadow) that would look out of place drawn full-screen.
 public final class OverlayWindow: NSWindow {
     public init(screen: NSScreen) {
+        // NSWindow's `screen:` overload is a convenience initializer, so subclasses
+        // must use this designated initializer. Supplying the target screen's frame
+        // in global display coordinates places the window on that screen.
         super.init(
             contentRect: screen.frame,
             styleMask: [.borderless],
