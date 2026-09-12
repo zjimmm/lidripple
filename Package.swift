@@ -26,7 +26,10 @@ let package = Package(
             dependencies: ["LidRippleCore", "LidRippleSensor", "LidRippleTrace"]
         ),
         .testTarget(name: "LidRippleTraceTests", dependencies: ["LidRippleTrace", "LidRippleCore"]),
-        .target(name: "LidRippleOverlay", dependencies: ["LidRippleCore"]),
+        .target(
+            name: "LidRippleOverlay",
+            dependencies: ["LidRippleCore", "LidRippleCapture", "LidRippleRenderer"]
+        ),
         .executableTarget(
             name: "LidRippleApp",
             dependencies: ["LidRippleCore", "LidRippleSensor", "LidRippleOverlay"]
