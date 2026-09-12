@@ -7,13 +7,14 @@ import LidRippleCore
 import LidRippleRenderer
 @testable import LidRippleOverlay
 
-@Test @MainActor func presenterInitSucceedsOrFailsWithoutCrashing() {
+extension OverlayAppKitTests {
+@Test func presenterInitSucceedsOrFailsWithoutCrashing() {
     if let presenter = OverlayPresenter() {
         #expect(presenter.windowID != 0)
     }
 }
 
-@Test @MainActor func presenterForwardsEveryStateToItsRenderingSurface() {
+@Test func presenterForwardsEveryStateToItsRenderingSurface() {
     guard let screen = NSScreen.main else { return }
     let presentation = FakePresentation()
     let presenter = OverlayPresenter(screen: screen, presentation: presentation)
@@ -26,7 +27,7 @@ import LidRippleRenderer
     #expect(presentation.states.allSatisfy { $0.progress == 0.5 })
 }
 
-@Test @MainActor func presenterClearSourceForwardsToItsRenderingSurface() {
+@Test func presenterClearSourceForwardsToItsRenderingSurface() {
     guard let screen = NSScreen.main else { return }
     let presentation = FakePresentation()
     let presenter = OverlayPresenter(screen: screen, presentation: presentation)
@@ -36,7 +37,7 @@ import LidRippleRenderer
     #expect(presentation.clearCount == 1)
 }
 
-@Test @MainActor func fallbackRevealClearsCapturedContentAndFollowsProgressAlpha() throws {
+@Test func fallbackRevealClearsCapturedContentAndFollowsProgressAlpha() throws {
     guard let screen = NSScreen.main else { return }
     let presentation = FakePresentation()
     let presenter = OverlayPresenter(screen: screen, presentation: presentation)
@@ -54,7 +55,7 @@ import LidRippleRenderer
     #expect(presenter.windowForTesting.alphaValue == 1)
 }
 
-@Test @MainActor func normalSourceResetsFallbackRevealAlpha() throws {
+@Test func normalSourceResetsFallbackRevealAlpha() throws {
     guard let screen = NSScreen.main else { return }
     let presentation = FakePresentation()
     let presenter = OverlayPresenter(screen: screen, presentation: presentation)
@@ -67,7 +68,7 @@ import LidRippleRenderer
     #expect(presenter.windowForTesting.alphaValue == 1)
 }
 
-@Test @MainActor func abortHidesAndDiscardsSource() {
+@Test func abortHidesAndDiscardsSource() {
     guard let screen = NSScreen.main else { return }
     let presentation = FakePresentation()
     let presenter = OverlayPresenter(screen: screen, presentation: presentation)
@@ -79,7 +80,7 @@ import LidRippleRenderer
     #expect(!presenter.windowForTesting.isVisible)
 }
 
-@Test @MainActor func resizeRestoresWindowAndPresentationToTheTargetScreen() {
+@Test func resizeRestoresWindowAndPresentationToTheTargetScreen() {
     guard let screen = NSScreen.main else { return }
     let presentation = FakePresentation()
     let presenter = OverlayPresenter(screen: screen, presentation: presentation)
@@ -92,7 +93,7 @@ import LidRippleRenderer
     #expect(presentation.view.frame == NSRect(origin: .zero, size: screen.frame.size))
 }
 
-@Test @MainActor func reducedQualityForwardsToPresentation() {
+@Test func reducedQualityForwardsToPresentation() {
     guard let screen = NSScreen.main else { return }
     let presentation = FakePresentation()
     let presenter = OverlayPresenter(screen: screen, presentation: presentation)
@@ -100,6 +101,7 @@ import LidRippleRenderer
     presenter.setReducedQuality(true)
 
     #expect(presentation.reducedQualityValues == [true])
+}
 }
 
 @MainActor
@@ -158,10 +160,12 @@ private extension CapturedFrame {
     }
 }
 
-@Test @MainActor func presenterUpdateDoesNotCrashAcrossEveryPhase() {
+extension OverlayAppKitTests {
+@Test func presenterUpdateDoesNotCrashAcrossEveryPhase() {
     guard let presenter = OverlayPresenter() else { return }
 
     for phase in FoldPhase.allCases {
         presenter.update(FoldState(phase: phase, progress: 0.5, velocity: 0))
     }
+}
 }

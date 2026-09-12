@@ -2,6 +2,7 @@ import Testing
 import AppKit
 @testable import LidRippleOverlay
 
+extension OverlayAppKitTests {
 @Test func screenReturnsWithoutCrashingOnAnyHardware() {
     // No assertion on the result itself: a MacBook returns a screen, a desktop
     // Mac or a headless test runner returns nil. Both are valid per spec section 6.
@@ -18,4 +19,5 @@ import AppKit
             #expect(BuiltInDisplay.displayID() == displayID)
         }
     }
+}
 }

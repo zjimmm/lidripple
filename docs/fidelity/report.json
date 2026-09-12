@@ -1,0 +1,66 @@
+{
+  "formatVersion": 1,
+  "status": "reference-analyzed-alignment-and-redistribution-pending",
+  "reference": {
+    "id": "apple-iphone-duo-product-film-us-2026",
+    "foldStartSeconds": 10.6106,
+    "foldCompleteSeconds": 11.745066666666666,
+    "durationSeconds": 1.1344666666666667,
+    "frameCount": 35,
+    "frameRate": 29.97002997002997,
+    "sourceManifest": "../../References/Duo/reference.json"
+  },
+  "candidate": {
+    "direction": "opening",
+    "curve": "smoothstep",
+    "tuning": "docs/fidelity/tuning.json (empty overrides on FoldTuning.default)",
+    "tuningSHA256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+    "source": "corrected foldStart panel frame (pending measured alignment)",
+    "sourceSHA256": null,
+    "runtimeDurationSeconds": 0.62,
+    "durationDifferenceSeconds": 0.5144666666666667,
+    "durationGatePass": false
+  },
+  "localArtifacts": {
+    "comparisonGIFSHA256": null,
+    "contactSheetSHA256": null,
+    "runManifestSHA256": null,
+    "metricsSHA256": null,
+    "checkedIntoRepository": false,
+    "reason": "Prior unaligned artifacts were invalidated. Measured fixed alignment/mask and redistribution permission remain outstanding."
+  },
+  "visualReview": {
+    "date": "2026-09-12",
+    "reviewer": "Codex implementation review",
+    "result": "prior stretched-timeline comparison invalidated; runtime-timed candidate requires new review",
+    "observations": [
+      "The previous artifact stretched candidate progress to the reference duration and cannot support timing parity.",
+      "The runtime-timed 620 ms candidate must be regenerated before qualitative approval.",
+      "The reference is a horizontal opening shot with no literal black void; void parity remains an axis-normalized analogy, not a direct measurement."
+    ]
+  },
+  "performance": {
+    "machine": "Apple M4",
+    "coordinatorSchedulingP95Milliseconds": 0.013,
+    "firstTenGPUFrameMaximumMilliseconds": 2.713,
+    "submitToCompleteMaximumMilliseconds": 29.515,
+    "sourceSetupMilliseconds": 37.556,
+    "realCaptureReadyMilliseconds": 92.715,
+    "nativeFrameBudgetMilliseconds": 16.667,
+    "firstTenSubmitToCompletePass": false,
+    "measurementCommand": "LIDRIPPLE_FIDELITY_BENCHMARK=1 swift test --filter FirstFramesPerformanceTests -Xswiftc -warnings-as-errors",
+    "observedRuns": [
+      {"sourceSetupMilliseconds": 37.556, "gpuMaximumMilliseconds": 3.607, "submitToCompleteMaximumMilliseconds": 29.515, "pass": false},
+      {"sourceSetupMilliseconds": 7.004, "gpuMaximumMilliseconds": 2.674, "submitToCompleteMaximumMilliseconds": 6.501, "pass": true}
+    ],
+    "note": "The gate now asserts submit-to-complete time. A cold run exceeded one refresh while a subsequent warm run passed, so S3 remains unproven until cold-start behavior is stabilized."
+  },
+  "s6": {
+    "implemented": true,
+    "referenceMeasured": true,
+    "localFrameMatchedComparisonGenerated": false,
+    "comparisonGIFCommitted": false,
+    "complete": false,
+    "remainingGate": "Obtain permission for the Apple excerpt or replace it with project-owned real-device footage, then regenerate and commit the comparison GIF."
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "referenceId": "apple-iphone-duo-product-film-us-2026",
+  "source": {
+    "title": "iPhone Duo product film",
+    "publisher": "Apple Inc.",
+    "landingPageURL": "https://www.apple.com/iphone-duo/",
+    "masterPlaylistURL": "https://www.apple.com/105/media/us/iphone-duo/2026/9305e4b9-72d9-4c05-9381-b572adadd5e5/films/product/iphone-duo-product-tpl-us-2026_16x9.m3u8",
+    "analyzedVariantURL": "https://www.apple.com/105/media/us/iphone-duo/2026/9305e4b9-72d9-4c05-9381-b572adadd5e5/films/product/iphone-duo-product-tpl-us-2026_640x360_avc_vid_segments/prog_index.m3u8",
+    "acquiredAt": "2026-09-12T23:14:47+08:00",
+    "rights": {
+      "copyrightHolder": "Apple Inc.",
+      "licenseIdentifier": null,
+      "redistributionAndDerivativePermission": "not-established",
+      "repositoryPolicy": "Do not commit the source video, decoded source frames, contact sheets, or GIFs derived from this source without separate written permission."
+    }
+  },
+  "analysisCopy": {
+    "checkedIntoRepository": false,
+    "construction": "Byte-for-byte concatenation of the HLS initialization fragment fileSequence0.mp4 and media fragments fileSequence1.m4s through fileSequence31.m4s in playlist order.",
+    "byteCount": 18246686,
+    "sha256": "c64ee47ae78a00fff921fc4d4dbe12e56087f57d13bfa592d0c499dc94f3326b",
+    "masterPlaylistSHA256": "9be6628af16ff00e654e15dd9997c0f62eec5ab8a4bca5e37d649f307d1b4b67",
+    "variantPlaylistSHA256": "f3dde0a69a3d2c99701a85a52be0adfa783298636780cbcd5357e2d003a2bf8c"
+  },
+  "technical": {
+    "container": "fragmented MP4 assembled from HLS",
+    "videoCodec": "AVC/H.264 (avc1.64001e)",
+    "widthPixels": 640,
+    "heightPixels": 360,
+    "pixelAspectRatio": "1:1",
+    "frameRate": {
+      "numerator": 30000,
+      "denominator": 1001,
+      "decimalFPS": 29.97002997002997
+    },
+    "presentationTimeScale": 30000,
+    "frameDurationTicks": 1001,
+    "durationSeconds": 181.64813333333333,
+    "colorMetadata": {
+      "primaries": "SMPTE_C",
+      "transferFunction": "ITU_R_709_2",
+      "yCbCrMatrix": "ITU_R_601_4",
+      "fullRangeVideo": false
+    }
+  },
+  "transition": {
+    "direction": "opening",
+    "description": "Portrait outer display blurs as the device unfolds; a sharp inner-display aperture expands from the right of the moving seam, followed by a blur-resolution tail on the left pane.",
+    "anchors": {
+      "foldStart": {
+        "absoluteFrame": 318,
+        "presentationTimeTicks": 318318,
+        "presentationTimeSeconds": 10.6106,
+        "definition": "Last frame with no repeatable transition blur or aperture separation."
+      },
+      "firstAltered": {
+        "absoluteFrame": 319,
+        "presentationTimeTicks": 319319,
+        "presentationTimeSeconds": 10.643966666666667,
+        "definition": "First frame whose right-side icon band crosses below 90 percent of the preceding clean frame's Sobel edge energy."
+      },
+      "firstClearInnerAperture": {
+        "absoluteFrame": 324,
+        "presentationTimeTicks": 324324,
+        "presentationTimeSeconds": 10.8108,
+        "definition": "First frame with a clearly separable sharp inner-display aperture to the right of the moving fold seam."
+      },
+      "fullAperture": {
+        "absoluteFrame": 348,
+        "presentationTimeTicks": 348348,
+        "presentationTimeSeconds": 11.6116,
+        "definition": "First frame where the physical display aperture has reached its final observed width; the left pane is still visibly blurred."
+      },
+      "foldComplete": {
+        "absoluteFrame": 352,
+        "presentationTimeTicks": 352352,
+        "presentationTimeSeconds": 11.745066666666666,
+        "definition": "First frame of three consecutive frames with visually stable geometry and left-pane edge energy within a 1.4 percent range."
+      }
+    },
+    "durations": {
+      "foldStartToFoldCompleteFrameIntervals": 34,
+      "foldStartToFoldCompleteSeconds": 1.1344666666666667,
+      "firstAlteredToFoldCompleteFrameIntervals": 33,
+      "firstAlteredToFoldCompleteSeconds": 1.1011,
+      "firstInnerApertureToFullApertureFrameIntervals": 24,
+      "firstInnerApertureToFullApertureSeconds": 0.8008,
+      "blurLeadBeforeFirstInnerApertureSeconds": 0.16683333333333333,
+      "blurTailAfterFullApertureSeconds": 0.13346666666666667
+    },
+    "blurEvidence": {
+      "method": "Mean Sobel magnitude in the fixed source-pixel ROI x=365..404, y=120..234 for blur onset; x=200..289, y=90..249 for final left-pane stability.",
+      "cleanFrame318EdgeEnergy": 110.7209,
+      "firstAlteredFrame319EdgeEnergy": 95.2606,
+      "firstAlteredRetention": 0.860372,
+      "stableLeftPaneEdgeEnergyFrames352To354": [42.6703, 42.9904, 43.2708],
+      "limitations": "The ROIs are source-pixel measurements from a produced camera shot. Physical motion, occlusion, editorial motion blur, and H.264 compression prevent treating these values as direct UI blur radii."
+    },
+    "boundarySamples": {
+      "method": "Manual source-pixel annotation of the moving seam and current right display edge. Visible aperture is their horizontal distance, normalized by the 282-pixel aperture observed at frame 348.",
+      "estimatedPixelUncertainty": 4,
+      "samples": [
+        {"absoluteFrame": 324, "presentationTimeSeconds": 10.8108, "seamX": 377, "rightEdgeX": 424, "visibleAperturePixels": 47, "normalizedVisibleAperture": 0.167},
+        {"absoluteFrame": 328, "presentationTimeSeconds": 10.944266666666667, "seamX": 304, "rightEdgeX": 431, "visibleAperturePixels": 127, "normalizedVisibleAperture": 0.450},
+        {"absoluteFrame": 332, "presentationTimeSeconds": 11.077733333333333, "seamX": 250, "rightEdgeX": 436, "visibleAperturePixels": 186, "normalizedVisibleAperture": 0.660},
+        {"absoluteFrame": 336, "presentationTimeSeconds": 11.2112, "seamX": 200, "rightEdgeX": 441, "visibleAperturePixels": 241, "normalizedVisibleAperture": 0.855},
+        {"absoluteFrame": 340, "presentationTimeSeconds": 11.344666666666667, "seamX": 190, "rightEdgeX": 447, "visibleAperturePixels": 257, "normalizedVisibleAperture": 0.911},
+        {"absoluteFrame": 344, "presentationTimeSeconds": 11.478133333333333, "seamX": 181, "rightEdgeX": 454, "visibleAperturePixels": 273, "normalizedVisibleAperture": 0.968},
+        {"absoluteFrame": 348, "presentationTimeSeconds": 11.6116, "seamX": 176, "rightEdgeX": 458, "visibleAperturePixels": 282, "normalizedVisibleAperture": 1.000}
+      ]
+    },
+    "voidObservation": "This opening shot has no rising black void. Its corresponding measurable boundary is the near-vertical fold seam and expanding sharp aperture. A MacBook comparison may rotate the fold-axis coordinate, but must label that as an axis-normalized analogy rather than a literal void match."
+  },
+  "alignment": null,
+  "review": {
+    "anchorSelection": "analysis pending independent human confirmation",
+    "temporaryContactSheet": "/private/tmp/lidripple-duo-transition-contact.png",
+    "temporaryGIF": "/private/tmp/lidripple-duo-transition.gif",
+    "temporaryArtifactsAreRepositoryInputs": false
+  }
+}
