@@ -438,6 +438,11 @@ anyone can judge it.
 
 ## 14. Distribution
 
+- **Cost:** the Apple Developer Program ($99/year) is the project's *only* expense, and
+  exists solely to obtain a Developer ID certificate and notary access. Everything else
+  is $0: all frameworks are first-party SDK, there are no paid dependencies, and because
+  §11 forbids network access there is no infrastructure to host or meter. Development and
+  local testing need only a free Apple ID or ad-hoc signing.
 - **License:** MIT.
 - **Channel:** GitHub Releases — notarized, hardened-runtime, Developer ID signed DMG.
 - **Secondary:** Homebrew cask.
