@@ -11,5 +11,11 @@ import AppKit
 @Test func screenIsOneOfTheConnectedScreensWhenPresent() {
     if let screen = BuiltInDisplay.screen() {
         #expect(NSScreen.screens.contains(screen))
+        let displayID = BuiltInDisplay.displayID(for: screen)
+        #expect(displayID != nil)
+        if let displayID {
+            #expect(CGDisplayIsBuiltin(displayID) != 0)
+            #expect(BuiltInDisplay.displayID() == displayID)
+        }
     }
 }

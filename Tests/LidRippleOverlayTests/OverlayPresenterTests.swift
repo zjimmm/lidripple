@@ -3,7 +3,9 @@ import LidRippleCore
 @testable import LidRippleOverlay
 
 @Test @MainActor func presenterInitSucceedsOrFailsWithoutCrashing() {
-    _ = OverlayPresenter()
+    if let presenter = OverlayPresenter() {
+        #expect(presenter.windowID != 0)
+    }
 }
 
 @Test @MainActor func presenterUpdateDoesNotCrashAcrossEveryPhase() {

@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import LidRippleCore
 
 /// Owns the fold overlay and maps driver phases to its visible lifecycle.
@@ -10,6 +11,9 @@ import LidRippleCore
 public final class OverlayPresenter {
     private let window: OverlayWindow
     private let placeholderView: FoldPlaceholderView
+
+    /// WindowServer identifier used to exclude the overlay from screen capture.
+    public var windowID: CGWindowID { CGWindowID(window.windowNumber) }
 
     public init?() {
         guard let screen = BuiltInDisplay.screen() else { return nil }
