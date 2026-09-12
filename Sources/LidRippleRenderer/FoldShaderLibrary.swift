@@ -1,0 +1,170 @@
+import Metal
+
+enum FoldShaderLibrary {
+    static func make(device: any MTLDevice) throws -> any MTLLibrary {
+        try device.makeLibrary(source: source, options: nil)
+    }
+
+    static let source = #"""
+    #include <metal_stdlib>
+    using namespace metal;
+
+    struct FoldVertex {
+        float2 position [[attribute(0)]];
+        float2 textureCoordinate [[attribute(1)]];
+    };
+
+    struct FoldUniforms {
+        float4 geometry;
+        float4 cameraAndBlur;
+        float4 voidAndRim;
+        float4 finish;
+        float4 dimensions;
+        float4 colorAndTap;
+    };
+
+    struct FoldVaryings {
+        float4 position [[position]];
+        float2 textureCoordinate;
+        float panelV;
+    };
+
+    vertex FoldVaryings foldVertex(
+        FoldVertex input [[stage_in]],
+        constant FoldUniforms &uniforms [[buffer(1)]])
+    {
+        const float progress = uniforms.geometry.x;
+        const float squashGain = uniforms.geometry.y;
+        const float rotation = uniforms.geometry.z * progress;
+        const float fieldOfView = uniforms.geometry.w;
+        const float eyeDistance = uniforms.cameraAndBlur.x;
+        const float eyeOffset = uniforms.cameraAndBlur.y;
+
+        // Texture coordinates use Metal's top-left convention, while panelV is
+        // defined by the design as zero at the bottom hinge.
+        const float panelV = 1.0f - input.textureCoordinate.y;
+        const float squashedV = pow(panelV, 1.0f + squashGain * progress);
+        const float depth = squashedV * sin(rotation);
+        const float rotatedHeight = squashedV * cos(rotation);
+        const float focalScale = 1.0f / tan(max(fieldOfView, 0.01f) * 0.5f);
+        const float cameraDistance = max(eyeDistance * focalScale, 0.01f);
+        const float perspective = cameraDistance / (cameraDistance + depth);
+
+        FoldVaryings output;
+        output.position = float4(
+            input.position.x * perspective,
+            -1.0f + 2.0f * rotatedHeight * perspective
+                + eyeOffset * depth * progress,
+            0.0f,
+            1.0f
+        );
+        output.textureCoordinate = input.textureCoordinate;
+        output.panelV = panelV;
+        return output;
+    }
+
+    static float foldNoise(float2 pixel) {
+        // The difference of two decorrelated hashes removes low-frequency bias
+        // and leaves energy concentrated at pixel frequency for dark-gradient
+        // dither. It is fixed in screen space so still frames do not shimmer.
+        const float a = fract(sin(dot(pixel, float2(12.9898f, 78.233f))) * 43758.5453f);
+        const float b = fract(sin(dot(pixel + 19.19f, float2(39.3468f, 11.135f))) * 24634.6345f);
+        return (a - b) * 0.5f;
+    }
+
+    fragment float4 foldFragment(
+        FoldVaryings input [[stage_in]],
+        texture2d<float> source [[texture(0)]],
+        sampler sourceSampler [[sampler(0)]],
+        constant FoldUniforms &uniforms [[buffer(1)]])
+    {
+        const float progress = uniforms.geometry.x;
+        const float maxBlur = uniforms.cameraAndBlur.z;
+        const float blurExponent = uniforms.cameraAndBlur.w;
+        const float sourceHeight = uniforms.dimensions.w;
+        const float panelV = input.panelV;
+
+        const float radius = pow(progress, blurExponent)
+            * (0.15f + 1.85f * pow(panelV, 1.4f)) * maxBlur;
+        const float maxLOD = max(float(source.get_num_mip_levels()) - 1.0f, 0.0f);
+        const float lod = clamp(log2(max(radius, 1.0f)), 0.0f, maxLOD);
+        const float tapOffset = uniforms.colorAndTap.w * radius / max(sourceHeight, 1.0f);
+        float4 color = source.sample(sourceSampler, input.textureCoordinate, level(lod)) * 0.72f;
+        color += source.sample(
+            sourceSampler,
+            input.textureCoordinate + float2(0.0f, tapOffset),
+            level(lod)
+        ) * 0.14f;
+        color += source.sample(
+            sourceSampler,
+            input.textureCoordinate - float2(0.0f, tapOffset),
+            level(lod)
+        ) * 0.14f;
+
+        const float horizon = uniforms.voidAndRim.x * progress;
+        const float softness = max(uniforms.voidAndRim.y, 0.0001f);
+        const float lit = smoothstep(0.0f, 1.0f, (panelV - horizon) / softness);
+        const float3 warmBlack = uniforms.colorAndTap.xyz;
+        color.rgb = mix(warmBlack, color.rgb, lit);
+
+        const float widenedRim = max(
+            uniforms.voidAndRim.z * mix(1.0f, uniforms.finish.x, progress),
+            0.0001f
+        );
+        const float rimCoordinate = (panelV - horizon) / widenedRim;
+        const float rim = exp(-(rimCoordinate * rimCoordinate)) * uniforms.voidAndRim.w;
+        color.rgb += rim * float3(0.38f, 0.68f, 1.0f);
+
+        const float coolAmount = uniforms.finish.y * progress;
+        color.rgb = mix(color.rgb, color.rgb * float3(0.92f, 1.0f, 1.10f), coolAmount);
+
+        const float2 centered = input.textureCoordinate * 2.0f - 1.0f;
+        const float vignette = smoothstep(0.35f, 1.25f, length(centered));
+        color.rgb *= 1.0f - uniforms.finish.z * progress * vignette;
+
+        const float2 pixel = input.position.xy;
+        color.rgb += foldNoise(pixel) * uniforms.finish.w * progress;
+        return float4(clamp(color.rgb, 0.0f, 1.0f), color.a);
+    }
+
+    kernel void gaussianHorizontal(
+        texture2d<float, access::read> source [[texture(0)]],
+        texture2d<float, access::write> destination [[texture(1)]],
+        uint2 gid [[thread_position_in_grid]])
+    {
+        if (gid.x >= destination.get_width() || gid.y >= destination.get_height()) {
+            return;
+        }
+        const int sourceX = int(gid.x) * 2;
+        const int sourceY = int(gid.y);
+        const int maximumX = int(source.get_width()) - 1;
+        float4 sum = float4(0.0f);
+        constexpr float weights[5] = { 0.0625f, 0.25f, 0.375f, 0.25f, 0.0625f };
+        for (int tap = -2; tap <= 2; ++tap) {
+            const uint x = uint(clamp(sourceX + tap, 0, maximumX));
+            sum += source.read(uint2(x, uint(sourceY))) * weights[tap + 2];
+        }
+        destination.write(sum, gid);
+    }
+
+    kernel void gaussianVertical(
+        texture2d<float, access::read> source [[texture(0)]],
+        texture2d<float, access::write> destination [[texture(1)]],
+        uint2 gid [[thread_position_in_grid]])
+    {
+        if (gid.x >= destination.get_width() || gid.y >= destination.get_height()) {
+            return;
+        }
+        const int sourceX = int(gid.x);
+        const int sourceY = int(gid.y) * 2;
+        const int maximumY = int(source.get_height()) - 1;
+        float4 sum = float4(0.0f);
+        constexpr float weights[5] = { 0.0625f, 0.25f, 0.375f, 0.25f, 0.0625f };
+        for (int tap = -2; tap <= 2; ++tap) {
+            const uint y = uint(clamp(sourceY + tap, 0, maximumY));
+            sum += source.read(uint2(uint(sourceX), y)) * weights[tap + 2];
+        }
+        destination.write(sum, gid);
+    }
+    """#
+}
