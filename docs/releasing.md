@@ -83,9 +83,16 @@ uploading the asset. A different byte sequence is a different release candidate.
    This also checks the adjacent `.dmg.sha256` sidecar. Keep the DMG and sidecar in the
    same directory and do not rename either one.
 
-6. Copy the final digest from `dist/lidripple-1.0.0.dmg.sha256`. Create
-   `Casks/lidripple.rb` with the exact 64-character value—never `:no_check`—and this
-   immutable URL:
+6. Generate `Casks/lidripple.rb` from the verified DMG and matching checksum sidecar:
+
+   ```sh
+   mkdir -p Casks
+   scripts/write-cask.sh --dmg dist/lidripple-1.0.0.dmg --output Casks/lidripple.rb
+   ```
+
+   The generator refuses to overwrite an existing cask or use a mismatched digest.
+   Inspect the generated file; it must contain the exact 64-character SHA-256—never
+   `:no_check`—and this immutable URL:
 
    ```text
    https://github.com/zjimmm/lidripple/releases/download/v1.0.0/lidripple-1.0.0.dmg

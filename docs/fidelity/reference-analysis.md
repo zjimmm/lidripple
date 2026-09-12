@@ -74,6 +74,17 @@ void parity.
 
 ## Implications for tuning
 
+The strict M4 fixed-panel alignment is not recoverable from this shot as-is.
+At `foldStart`, the visible portrait outer display is partly covered by the
+left hand, including its lower corners. By full aperture, the view is a
+different landscape inner display with different content. Four measured
+`foldStart` panel corners and a single same-content transform across the clip
+therefore cannot be recorded honestly from these frames. This is separate from
+Apple's unresolved redistribution rights: permission alone would not make the
+current film satisfy the plan's fixed-alignment contract. A suitable
+project-owned shot of one continuously visible panel, or an explicitly
+approved revision of the comparison contract, is needed for S6.
+
 - Treat geometry and blur as overlapping envelopes. Blur leads clear aperture motion by
   166.8 ms and trails full aperture by 133.5 ms.
 - The current 620 ms scripted unfold is comparable to the high-energy middle of the

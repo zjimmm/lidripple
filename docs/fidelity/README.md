@@ -19,10 +19,13 @@ The checked-in evidence is:
 ## Reproduce locally
 
 Download the official 640×360 AVC HLS variant and its initialization/media fragments
-into a local directory, preserving the playlist's relative paths. Before running, replace
-the manifest's `alignment: null` with measured fixed display corners, corrected output
-dimensions, and normalized exclusion polygons for hands/glare. The tool deliberately fails
-until this evidence exists. Then run:
+into a local directory, preserving the playlist's relative paths. The current Apple shot
+cannot satisfy strict alignment as-is: hands hide the `foldStart` panel's lower corners,
+and the shot changes from outer portrait content to a different inner landscape panel.
+Do not invent missing corners. With a suitable lawfully usable reference, replace the
+manifest's `alignment: null` with measured fixed display corners, corrected output
+dimensions, and normalized exclusion polygons for hands/glare. The tool deliberately
+fails until this evidence exists. Then run:
 
 ```sh
 swift run lidripple-fidelity \

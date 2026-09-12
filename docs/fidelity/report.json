@@ -27,7 +27,7 @@
     "runManifestSHA256": null,
     "metricsSHA256": null,
     "checkedIntoRepository": false,
-    "reason": "Prior unaligned artifacts were invalidated. Measured fixed alignment/mask and redistribution permission remain outstanding."
+    "reason": "Prior unaligned artifacts were invalidated. The foldStart outer panel is hand-occluded and the shot switches to a different inner panel, so the strict fixed same-content transform is not measurable; redistribution permission is also outstanding."
   },
   "visualReview": {
     "date": "2026-09-12",
@@ -65,6 +65,6 @@
     "localFrameMatchedComparisonGenerated": false,
     "comparisonGIFCommitted": false,
     "complete": false,
-    "remainingGate": "Obtain permission for the Apple excerpt or replace it with project-owned real-device footage, then regenerate and commit the comparison GIF."
+    "remainingGate": "Replace this two-panel/hand-occluded shot with lawfully redistributable, continuously visible real-device footage, or explicitly revise the strict fixed-alignment contract; then regenerate, review, and commit the comparison GIF."
   }
 }

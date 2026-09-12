@@ -42,6 +42,12 @@ The app therefore fails closed at startup and accepts a direct status-menu openi
 as explicit user-presence evidence. Automatic startup and lock-screen behavior on
 this OS still require physical observation; the menu interaction is not an S7 pass.
 
+Cask-generator smoke, 2026-09-13: `scripts/write-cask.sh` produced a Ruby-syntax-valid
+temporary cask from an ad-hoc test DMG and its matching SHA-256 sidecar, then refused
+to overwrite that cask. The fixture is not Developer ID signed or notarized.
+`brew style --cask` refused the `/private/tmp` file because Homebrew requires casks
+to reside in a tap; style/audit/install remain unchecked release gates.
+
 ## M4 / S6 fidelity prerequisite
 
 - [ ] `docs/fidelity/duo-comparison.gif` exists above the README fold
