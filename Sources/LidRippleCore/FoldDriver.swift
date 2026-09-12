@@ -117,7 +117,7 @@ public final class FoldDriver {
         case .unfolding:
             if directionCommitted(closing: true, angle: angle, now: now) {
                 phase = .folding
-            } else if spring.value <= 0.001, angle > tuning.idleReturnAngle {
+            } else if spring.value <= tuning.springSettleEpsilon, angle > tuning.idleReturnAngle {
                 phase = .idle
                 spring.reset(to: 0)
             }

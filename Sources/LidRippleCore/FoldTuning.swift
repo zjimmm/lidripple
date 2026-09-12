@@ -37,6 +37,9 @@ public struct FoldTuning: Codable, Equatable, Sendable {
     public var feedForward: Double = 0.06
     public var maxProgress: Double = 1.06
     public var substepSeconds: Double = 1.0 / 240.0
+    /// Below this, the spring is considered at rest for phase-transition purposes
+    /// (e.g. unfolding -> idle). A numerical epsilon, not a feel-tuning knob.
+    public var springSettleEpsilon: Double = 0.001
 
     // MARK: Scripted unfold on unlock (spec FR-10)
     public var scriptedUnfoldSeconds: Double = 0.620
@@ -94,6 +97,7 @@ public struct FoldTuning: Codable, Equatable, Sendable {
             case "feedForward": feedForward = value
             case "maxProgress": maxProgress = value
             case "substepSeconds": substepSeconds = value
+            case "springSettleEpsilon": springSettleEpsilon = value
             case "scriptedUnfoldSeconds": scriptedUnfoldSeconds = value
             case "squashExponentGain": squashExponentGain = value
             case "rotationDegrees": rotationDegrees = value
