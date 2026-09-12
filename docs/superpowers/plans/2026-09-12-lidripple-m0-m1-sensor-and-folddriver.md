@@ -38,6 +38,34 @@ Two refinements this plan adds. Both are noted here rather than buried, because 
 
 ---
 
+## Requirement traceability
+
+Which spec requirement each task discharges. Requirements absent from this table
+belong to later plans: FR-9 (lock detection) to M3, FR-11 and FR-12 (fallback
+driver) and FR-15 and FR-16 (menu bar) to M5, FR-13 and FR-14 (displays) to M2.
+
+| Spec | Requirement | Task |
+|---|---|---|
+| FR-1 | Nothing captured or drawn while the lid is open and static | 6, 7 (progress pinned to 0 in `idle`/`armed`) |
+| FR-2 | Enter `armed` below 110° with closing velocity | 6 |
+| FR-3 | Enter `folding` below 75° | 6 |
+| FR-4 | Spring-driven progress, complete by 25° | 5, 7 |
+| FR-5 | Enter `sealed` below 12° or on sleep | 6 (`signalSleep`) |
+| FR-6 | Sustained opening reverses the fold | 6 (direction gate) |
+| FR-7 | Return to `idle` at progress 0 above 78° | 6 (hysteresis gap) |
+| FR-8 | Reversal is clean and never completes the fold | 7, 10 |
+| FR-10 | Scripted 620 ms unfold after unlock | 7 (`beginScriptedUnfold`) |
+| FR-17 | Intensity scales only blur, rotation, squash | 3, 10 |
+| §4 | Sensor identifiers, 60 Hz polling | 2 |
+| §9.1 | Angle→progress mapping, spring, feed-forward, clamp | 5, 7 |
+| §9.2 | Filtering, deadband, direction gating | 4 |
+| §9.4 | All constants in one `Codable` struct | 3 |
+| §12.1 | Trace record and replay | 8, 9, 10 |
+| §12.2 | Pure `FoldDriver` unit tests | 6, 7, 10 |
+| §15 | Input Monitoring risk retired | 2 (Step 6) |
+
+---
+
 ## File Structure
 
 | File | Responsibility |
