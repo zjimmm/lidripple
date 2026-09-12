@@ -3,8 +3,9 @@ import Metal
 import Testing
 @testable import LidRippleRenderer
 
-/// Opt-in GPU probe for S3. Unlike the steady-state renderer benchmark, this
-/// intentionally performs no warm-up frames before measuring frames 1...10.
+/// Opt-in GPU probe for S3. Unlike the steady-state benchmark, this performs
+/// no test-only warm-up before frames 1...10; the production renderer itself
+/// prewarms its pipeline during construction, before a visible fold.
 @Suite(.serialized)
 struct FirstFramesPerformanceTests {
     @Test func nativeResolutionFirstTenFramesFitSixtyHertzBudget() throws {
@@ -59,13 +60,14 @@ struct FirstFramesPerformanceTests {
         let gpuMaximum = gpuSamples.max() ?? 0
         let completionMaximum = submitToCompleteSamples.max() ?? 0
         print(String(
-            format: "S3_FIRST10_GPU device=%@ resolution=%dx%d source_setup_ms=%.3f gpu_ms=%@ gpu_max_ms=%.3f submit_to_complete_max_ms=%.3f refresh_budget_ms=%.3f",
+            format: "S3_FIRST10_GPU device=%@ resolution=%dx%d source_setup_ms=%.3f gpu_ms=%@ gpu_max_ms=%.3f submit_to_complete_ms=%@ submit_to_complete_max_ms=%.3f refresh_budget_ms=%.3f",
             device.name,
             width,
             height,
             sourceSetup * 1_000,
             gpuSamples.map { String(format: "%.3f", $0 * 1_000) }.joined(separator: ","),
             gpuMaximum * 1_000,
+            submitToCompleteSamples.map { String(format: "%.3f", $0 * 1_000) }.joined(separator: ","),
             completionMaximum * 1_000,
             refreshInterval * 1_000
         ))

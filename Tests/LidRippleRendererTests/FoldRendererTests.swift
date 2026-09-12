@@ -5,6 +5,7 @@ import LidRippleCore
 
 @Test func rendererDoesNotEncodeWithoutASource() throws {
     let context = try RendererTestContext()
+    #expect(context.renderer.pyramidBuildCount == 0)
     let target = try context.makeTarget(width: 32, height: 16)
     let commandBuffer = try #require(context.commandQueue.makeCommandBuffer())
 

@@ -89,9 +89,15 @@ Evidence and redacted notes: pending
 Current design blocker: `willSleep` synchronously hard-seals and tears down
 ScreenCaptureKit as required by the sleep-safety contract. Its public notification
 may arrive too late to display the 550 ms fallback program; the program is
-implemented and unit-tested but is not triggered early enough to claim this
-physical acceptance row. S7 must measure an earlier public trigger on the actual
-M2 Air or revise the behavior with evidence. Do not ship this as accepted S7.
+implemented and unit-tested but has no production `beginFallbackClose()` caller.
+Apple documents that a `willSleep` observer can delay sleep, and its power-management
+QA says forced lid-close sleep can be delayed but not cancelled. Neither source
+guarantees that the built-in panel remains visible after the lid switch fires
+([AppKit](https://developer.apple.com/documentation/appkit/nsworkspace/willsleepnotification),
+[IOKit QA1340](https://developer.apple.com/library/archive/qa/qa1340/_index.html)).
+S7 must measure the actual M2 Air's event-to-blank interval and demonstrate a safe,
+public trigger or a documented delay that keeps pixels visible. Do not ship this as
+accepted S7 based on the source unit tests or a sleep-delay assumption.
 
 Model / chip: M2 MacBook Air (physical unit pending)
 

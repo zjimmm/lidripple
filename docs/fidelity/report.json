@@ -42,18 +42,22 @@
   "performance": {
     "machine": "Apple M4",
     "coordinatorSchedulingP95Milliseconds": 0.013,
-    "firstTenGPUFrameMaximumMilliseconds": 2.713,
-    "submitToCompleteMaximumMilliseconds": 29.515,
-    "sourceSetupMilliseconds": 37.556,
+    "firstTenGPUFrameMaximumMilliseconds": 3.706,
+    "submitToCompleteMaximumMilliseconds": 7.097,
+    "sourceSetupMilliseconds": 5.515,
     "realCaptureReadyMilliseconds": 92.715,
     "nativeFrameBudgetMilliseconds": 16.667,
-    "firstTenSubmitToCompletePass": false,
+    "firstTenSubmitToCompletePass": true,
     "measurementCommand": "LIDRIPPLE_FIDELITY_BENCHMARK=1 swift test --filter FirstFramesPerformanceTests -Xswiftc -warnings-as-errors",
+    "beforePipelinePrewarm": {"submitToCompleteMaximumMilliseconds": 29.515, "pass": false},
     "observedRuns": [
-      {"sourceSetupMilliseconds": 37.556, "gpuMaximumMilliseconds": 3.607, "submitToCompleteMaximumMilliseconds": 29.515, "pass": false},
-      {"sourceSetupMilliseconds": 7.004, "gpuMaximumMilliseconds": 2.674, "submitToCompleteMaximumMilliseconds": 6.501, "pass": true}
+      {"sourceSetupMilliseconds": 5.515, "gpuMaximumMilliseconds": 3.706, "submitToCompleteMaximumMilliseconds": 5.190, "pass": true},
+      {"sourceSetupMilliseconds": 5.143, "gpuMaximumMilliseconds": 2.862, "submitToCompleteMaximumMilliseconds": 5.356, "pass": true},
+      {"sourceSetupMilliseconds": 5.399, "gpuMaximumMilliseconds": 2.774, "submitToCompleteMaximumMilliseconds": 4.822, "pass": true},
+      {"sourceSetupMilliseconds": 4.521, "gpuMaximumMilliseconds": 2.811, "submitToCompleteMaximumMilliseconds": 7.097, "pass": true},
+      {"sourceSetupMilliseconds": 5.035, "gpuMaximumMilliseconds": 3.425, "submitToCompleteMaximumMilliseconds": 5.315, "pass": true}
     ],
-    "note": "The gate now asserts submit-to-complete time. A cold run exceeded one refresh while a subsequent warm run passed, so S3 remains unproven until cold-start behavior is stabilized."
+    "note": "A 1x1 synthetic render during renderer construction moved one-time Metal driver work before the first visible fold. Five independent test-process runs on an Apple M4 stayed below 16.667 ms, but this does not prove reboot-cold or M2 Air behavior."
   },
   "s6": {
     "implemented": true,

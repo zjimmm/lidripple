@@ -134,6 +134,63 @@ public final class FoldRenderer {
             uniformBuffers.append(buffer)
         }
         self.uniformBuffers = uniformBuffers
+
+        // Exercise the render pipeline with project-generated pixels before a
+        // live fold. Metal may otherwise defer one-time driver work until the
+        // first user-visible frame, occasionally missing a 60 Hz deadline.
+        try prewarmRenderPipeline()
+    }
+
+    private func prewarmRenderPipeline() throws {
+        let sourceDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .bgra8Unorm,
+            width: 1,
+            height: 1,
+            mipmapped: false
+        )
+        sourceDescriptor.storageMode = .shared
+        sourceDescriptor.usage = [.shaderRead]
+        guard let source = device.makeTexture(descriptor: sourceDescriptor) else {
+            throw RendererError.textureAllocationFailed
+        }
+        let pixel: [UInt8] = [0, 0, 0, 255]
+        pixel.withUnsafeBytes { bytes in
+            source.replace(
+                region: MTLRegionMake2D(0, 0, 1, 1),
+                mipmapLevel: 0,
+                withBytes: bytes.baseAddress!,
+                bytesPerRow: 4
+            )
+        }
+        let targetDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .bgra8Unorm,
+            width: 1,
+            height: 1,
+            mipmapped: false
+        )
+        targetDescriptor.storageMode = .private
+        targetDescriptor.usage = [.renderTarget]
+        guard let target = device.makeTexture(descriptor: targetDescriptor),
+              let commandBuffer = commandQueue.makeCommandBuffer() else {
+            throw RendererError.textureAllocationFailed
+        }
+        pyramid = try TexturePyramid.make(
+            source: source,
+            device: device,
+            commandQueue: commandQueue,
+            pipelines: gaussianPipelines
+        )
+        defer { pyramid = nil }
+        guard try render(progress: 0.5, to: target, commandBuffer: commandBuffer) else {
+            throw RendererError.commandBufferCreationFailed
+        }
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        guard commandBuffer.status == .completed else {
+            throw RendererError.commandBufferFailed(
+                commandBuffer.error?.localizedDescription ?? "render prewarm failed"
+            )
+        }
     }
 
     public func setSource(_ frame: CapturedFrame) throws {
