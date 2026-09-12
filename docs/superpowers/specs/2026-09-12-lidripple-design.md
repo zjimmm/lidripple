@@ -483,7 +483,8 @@ freshness from band width.
    edge-case list from §10.
 5. **M4 — Fidelity.** Tune against real Duo footage until S6 holds. Produce the comparison
    GIF.
-6. **M5 — Ship.** Fallback driver, menu bar, onboarding, notarization, README, cask.
+6. **M5 — Ship.** Fallback driver, menu bar, onboarding, notarization, README, cask,
+   `LICENSE` file (MIT, §14), and the GitHub Sponsors link.
 
 ---
 
