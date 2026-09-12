@@ -14,7 +14,7 @@ protocol CaptureSession: Sendable {
 typealias CaptureSessionFactory = @Sendable (
     _ displayID: CGDirectDisplayID,
     _ excludedWindowID: CGWindowID
-) async throws -> any CaptureSession
+) throws -> any CaptureSession
 
 /// The permission-bearing ScreenCaptureKit implementation behind the coordinator's
 /// test seam. Every instance owns at most one stream and one serial callback queue.
