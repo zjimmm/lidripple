@@ -20,6 +20,10 @@ public final class FoldDriver {
     private var gateSince: TimeInterval?
     private var gateStartAngle: Double?
 
+    /// Set while a scripted (angle-free) unfold is running. Spec FR-10.
+    private var scriptedUnfoldStart: TimeInterval?
+    private var lastTarget: Double = 0
+
     public private(set) var state: FoldState = .idle
 
     public init(tuning: FoldTuning = .default) {
@@ -55,6 +59,8 @@ public final class FoldDriver {
         filter = AngleFilter(tuning: tuning)
         lastTimestamp = nil
         clearGate()
+        scriptedUnfoldStart = nil
+        lastTarget = 0
         state = .idle
         return state
     }
@@ -128,16 +134,93 @@ public final class FoldDriver {
 
     // MARK: - Output
 
-    /// Task 6 keeps progress pinned to the phase so transitions can be tested
-    /// in isolation. Task 7 replaces this with the spring-driven version.
+    /// Spec section 9.1: the lid supplies the target, the spring supplies the
+    /// output. Feed-forward is expressed in progress units per second so it is
+    /// dimensionally consistent with `u`.
     private func publish(angle: Double, velocity: Double, dt: TimeInterval) -> FoldState {
-        let progress: Double
+        let span = tuning.foldStartAngle - tuning.foldEndAngle
+        let u = min(max((tuning.foldStartAngle - angle) / span, 0), 1)
+        let normalizedRate = -velocity / span            // progress units per second
+        let target = min(max(u + tuning.feedForward * normalizedRate, 0), tuning.maxProgress)
+        lastTarget = target
+
         switch phase {
-        case .idle, .armed: progress = 0
-        case .sealed: progress = 1.0
-        case .folding, .unfolding: progress = spring.value
+        case .idle, .armed:
+            spring.reset(to: 0)
+            state = FoldState(phase: phase, progress: 0, velocity: 0)
+        case .sealed:
+            state = FoldState(phase: .sealed, progress: 1.0, velocity: 0)
+        case .folding, .unfolding:
+            spring.step(target: target, dt: dt)
+            state = FoldState(
+                phase: phase,
+                progress: min(max(spring.value, 0), tuning.maxProgress),
+                velocity: spring.velocity
+            )
         }
-        state = FoldState(phase: phase, progress: progress, velocity: 0)
+        return state
+    }
+
+    /// Advances the spring toward the last computed target without a new angle
+    /// sample. Two uses: the scripted unfold, which has no angle input at all,
+    /// and rendering at a display rate higher than the 60 Hz sensor rate.
+    @discardableResult
+    public func tick(now: TimeInterval) -> FoldState {
+        let dt = lastTimestamp.map { max(now - $0, 0) } ?? 0
+        lastTimestamp = now
+        guard dt > 0 else { return state }
+
+        if let start = scriptedUnfoldStart {
+            // The spring is deliberately bypassed here. Spec FR-10 wants a definite
+            // 620 ms, and pushing a linear ramp through a 220/26 spring lags it by
+            // rate * damping / stiffness, about 0.19 progress, which would stretch
+            // the reveal past 900 ms and leave a visible tail. With no lid to track
+            // there is nothing for the spring to buy, so drive the curve directly.
+            let fraction = min(max((now - start) / tuning.scriptedUnfoldSeconds, 0), 1)
+            let eased = fraction * fraction * (3 - 2 * fraction)   // smoothstep
+            let progress = 1.0 - eased
+            lastTarget = progress
+            spring.reset(to: progress)   // keep spring state coherent for any later ingest
+            if fraction >= 1 {
+                scriptedUnfoldStart = nil
+                phase = .idle
+                spring.reset(to: 0)
+                state = .idle
+                return state
+            }
+            state = FoldState(
+                phase: .unfolding,
+                progress: progress,
+                velocity: -6 * fraction * (1 - fraction) / tuning.scriptedUnfoldSeconds
+            )
+            return state
+        }
+
+        switch phase {
+        case .folding, .unfolding:
+            spring.step(target: lastTarget, dt: dt)
+            state = FoldState(
+                phase: phase,
+                progress: min(max(spring.value, 0), tuning.maxProgress),
+                velocity: spring.velocity
+            )
+        default:
+            break
+        }
+        return state
+    }
+
+    /// Spec FR-10: after the session unlocks, unfold a freshly captured frame
+    /// on a timed curve. The lid is already open, so there is no angle to
+    /// track and `tick(now:)` drives this to completion.
+    @discardableResult
+    public func beginScriptedUnfold(now: TimeInterval) -> FoldState {
+        phase = .unfolding
+        scriptedUnfoldStart = now
+        lastTimestamp = now
+        spring.reset(to: 1.0)
+        clearGate()
+        state = FoldState(phase: .unfolding, progress: 1.0, velocity: 0)
         return state
     }
 }
