@@ -65,7 +65,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try source.start { [weak self] sample in
                 // HID samples arrive on the sensor's private queue. FoldDriver is
                 // intentionally kept on the main actor with the AppKit presenter.
-                Task { @MainActor [weak self] in
+                // A serial dispatch queue preserves the sensor's sample ordering;
+                // unstructured tasks would not provide that ordering guarantee.
+                DispatchQueue.main.async { [weak self] in
                     guard let self else { return }
                     let state = self.driver.ingest(sample)
                     self.overlay?.update(state)
