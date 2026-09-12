@@ -25,6 +25,9 @@ public struct MenuBarSnapshot: Equatable, Sendable {
 
 @MainActor
 public struct MenuBarActions {
+    /// A direct status-menu interaction is evidence the user's desktop UI is
+    /// reachable when macOS omits its private lock-state dictionary key.
+    public var menuDidOpen: () -> Void
     public var setEnabled: (Bool) -> Void
     public var setIntensity: (Double) -> Void
     public var setLaunchAtLogin: (Bool) -> Void
@@ -37,6 +40,7 @@ public struct MenuBarActions {
     public var reportError: (String) -> Void
 
     public init(
+        menuDidOpen: @escaping () -> Void = {},
         setEnabled: @escaping (Bool) -> Void,
         setIntensity: @escaping (Double) -> Void,
         setLaunchAtLogin: @escaping (Bool) -> Void,
@@ -47,6 +51,7 @@ public struct MenuBarActions {
         quit: @escaping () -> Void,
         reportError: @escaping (String) -> Void
     ) {
+        self.menuDidOpen = menuDidOpen
         self.setEnabled = setEnabled
         self.setIntensity = setIntensity
         self.setLaunchAtLogin = setLaunchAtLogin
@@ -100,6 +105,7 @@ public final class MenuBarController: NSObject {
         self.snapshot = snapshot
         self.actions = actions
         super.init()
+        menu.delegate = self
         buildMenu()
         update(snapshot)
 
@@ -318,4 +324,10 @@ public final class MenuBarController: NSObject {
     }
 
     @objc private func quit() { actions.quit() }
+}
+
+extension MenuBarController: NSMenuDelegate {
+    public func menuWillOpen(_ menu: NSMenu) {
+        actions.menuDidOpen()
+    }
 }

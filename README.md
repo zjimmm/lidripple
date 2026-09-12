@@ -130,6 +130,10 @@ real Apple credentials and cannot be replaced by CI or an ad-hoc signature.
 
 - **No animation:** confirm Enable is checked, the built-in display is active, and the
   menu does not report missing Screen Recording permission.
+- **Input remains paused immediately after launch:** on macOS builds that omit the
+  session lock-state key, open lidripple's status menu once after reaching the desktop.
+  The app waits for that direct interaction rather than guessing whether a locked
+  session is safe to capture. Automatic startup in this case is still a release gate.
 - **Permission remains denied after changing Settings:** reactivate or relaunch
   lidripple so it refreshes TCC state.
 - **Timed fallback selected:** this is expected when the HID endpoint is absent or

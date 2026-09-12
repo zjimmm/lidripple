@@ -372,6 +372,18 @@ public final class AppCoordinator: DebugScrubberSession {
         }
     }
 
+    /// When the private lock-state key is absent, startup must fail closed.
+    /// Opening this user's own status menu proves the desktop is interactive
+    /// without granting an unknown background session capture authority.
+    public func menuDidOpen() {
+        guard isStarted, !isTerminating, sessionRestricted,
+              sessionAccessNow() == .unknown,
+              isCurrentConsoleNow() else { return }
+        Task { @MainActor [weak self] in
+            await self?.unlockAndRestoreRuntime(explicitUnlock: true)
+        }
+    }
+
     public func setReducedQuality(_ reduced: Bool) {
         lifecycle.setReducedQuality(reduced)
     }
@@ -717,6 +729,7 @@ public final class AppCoordinator: DebugScrubberSession {
 
     private func makeMenuActions() -> MenuBarActions {
         MenuBarActions(
+            menuDidOpen: { [weak self] in self?.menuDidOpen() },
             setEnabled: { [weak self] in self?.setEnabled($0) },
             setIntensity: { [weak self] in self?.setIntensity($0) },
             setLaunchAtLogin: { [weak self] in self?.setLaunchAtLogin($0) },

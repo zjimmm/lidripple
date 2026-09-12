@@ -30,9 +30,17 @@ verification, created an unsigned local DMG, matched its generated SHA-256, and 
 `hdiutil verify`. These checks validate the tooling but do **not** satisfy the clean-
 checkout, Developer ID, notarization, Gatekeeper, cask, or final-release rows above.
 
-Development-only regression, 2026-09-13: 258/258 Swift tests and the release build
+Development-only regression, 2026-09-13: 261/261 Swift tests and the release build
 passed with warnings as errors after the lock/sleep, wake/unlock, source-handoff,
-and debug-overlay race fixes. These are not clean-checkout or physical S7 evidence.
+debug-overlay, and missing-lock-key recovery fixes. These are not clean-checkout
+or physical S7 evidence.
+
+Session probe, 2026-09-13: this development Mac is a `Mac16,12` M4 MacBook Air on
+macOS 26.6.2. While its desktop was visibly unlocked, `CGSessionCopyCurrentDictionary`
+reported `kCGSSessionOnConsoleKey=true` but omitted `CGSSessionScreenIsLocked`.
+The app therefore fails closed at startup and accepts a direct status-menu opening
+as explicit user-presence evidence. Automatic startup and lock-screen behavior on
+this OS still require physical observation; the menu interaction is not an S7 pass.
 
 ## M4 / S6 fidelity prerequisite
 
@@ -70,6 +78,7 @@ Evidence and redacted notes: pending
 - [ ] Enable, intensity endpoints, login, input, permission, and debug menu states pass
 - [ ] Debug scrubber requests no TCC and leaves no timer/window/capture after close
 - [ ] Fullscreen, Spaces, external display, lock/unlock, and display reconfiguration pass
+- [ ] Missing lock-state-key startup activates safely without requiring an undocumented heuristic or unexpected manual action
 - [ ] One-degree/raw-scale sensor caveat checked against a recorded physical sweep
 
 Model / chip / OS: pending
@@ -98,6 +107,13 @@ guarantees that the built-in panel remains visible after the lid switch fires
 S7 must measure the actual M2 Air's event-to-blank interval and demonstrate a safe,
 public trigger or a documented delay that keeps pixels visible. Do not ship this as
 accepted S7 based on the source unit tests or a sleep-delay assumption.
+
+For the physical timing run, execute `swift scripts/power-event-probe.swift` in a
+Terminal on the M2 Air, then close/reopen the lid and stop the probe with Ctrl-C.
+Record the model/OS, `registry.lidClosed`, `workspace.willSleep`, and
+`screens.didSleep` uptimes, plus a human observation of the last visible frame.
+The probe reads an undocumented registry property only for diagnosis; it does not
+capture pixels, request sleep, delay sleep, or enable that property in production.
 
 Model / chip: M2 MacBook Air (physical unit pending)
 

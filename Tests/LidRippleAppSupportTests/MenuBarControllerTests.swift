@@ -116,6 +116,13 @@ struct MenuBarControllerTests {
         controller.uninstall()
     }
 
+    @Test func menuOpenReportsDirectUserInteraction() {
+        let recorder = ActionRecorder()
+        let controller = makeController(recorder: recorder)
+        controller.menuWillOpen(controller.menu)
+        #expect(recorder.menuOpenCount == 1)
+    }
+
     private func makeController(
         recorder: ActionRecorder,
         installStatusItem: Bool = false
@@ -129,6 +136,7 @@ struct MenuBarControllerTests {
                 screenRecording: .notDetermined
             ),
             actions: MenuBarActions(
+                menuDidOpen: { recorder.menuOpenCount += 1 },
                 setEnabled: { recorder.enabledValues.append($0) },
                 setIntensity: { recorder.intensities.append($0) },
                 setLaunchAtLogin: { recorder.loginValues.append($0) },
@@ -172,6 +180,7 @@ struct MenuBarControllerTests {
 
 @MainActor
 private final class ActionRecorder {
+    var menuOpenCount = 0
     var enabledValues: [Bool] = []
     var intensities: [Double] = []
     var loginValues: [Bool] = []

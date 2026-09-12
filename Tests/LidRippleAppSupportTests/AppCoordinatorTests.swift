@@ -96,6 +96,32 @@ struct AppCoordinatorTests {
         #expect(harness.input.sessionRestricted)
     }
 
+    @Test func missingLockKeyAtLaunchWaitsForInteractiveStatusMenu() async {
+        let harness = makeHarness(permissionGranted: true)
+        harness.sessionAccess.value = .unknown
+        harness.coordinator.start(sessionAccess: .unknown)
+        #expect(harness.input.startCount == 0)
+        #expect(harness.input.sessionRestricted)
+
+        harness.coordinator.menuDidOpen()
+        for _ in 0..<100 where harness.input.startCount == 0 {
+            await Task.yield()
+        }
+        #expect(harness.events.values.contains("fresh-unfold"))
+        #expect(harness.input.startCount == 1)
+    }
+
+    @Test func statusMenuCannotUnlockAnOffConsoleSession() async {
+        let harness = makeHarness(permissionGranted: true)
+        harness.sessionAccess.value = .unknown
+        harness.sessionAccess.onConsole = false
+        harness.coordinator.start(sessionAccess: .unknown)
+        harness.coordinator.menuDidOpen()
+        await Task.yield()
+        #expect(harness.input.startCount == 0)
+        #expect(harness.input.sessionRestricted)
+    }
+
     @Test func activationRefreshStartsRuntimeAfterSettingsGrant() {
         let harness = makeHarness(permissionGranted: false, requestResult: false)
         harness.preferences.screenRecordingRequestMade = true
