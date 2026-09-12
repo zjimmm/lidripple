@@ -1,0 +1,149 @@
+# lidripple
+
+> **Pre-release status:** implementation is in progress. The frame-matched M4 Duo
+> comparison GIF, notarized v1.0.0 artifact, Homebrew cask, and physical M2 MacBook Air
+> fallback acceptance (S7) are not yet available. This repository does not claim those
+> release gates have passed.
+
+lidripple is a native macOS menu-bar agent that turns closing a MacBook lid into a
+screen-fold animation. A physical lid-angle sensor drives the effect when the hardware
+exposes one; other Macs use a timed approximation driven by sleep and wake events. Both
+modes use the same Swift state machine, ScreenCaptureKit freeze frame, and Metal renderer.
+
+The checked-in [M4 evidence](docs/fidelity/README.md) records reference provenance,
+timing analysis, local artifact hashes, and the remaining acceptance gaps. The required
+side-by-side artifact will be placed at `docs/fidelity/duo-comparison.gif` only after a
+lawfully redistributable reference is available and the runtime-timed result passes
+human fidelity review. It is intentionally not represented by a placeholder.
+
+## Requirements and compatibility
+
+- macOS 14 Sonoma or later
+- A built-in display
+- Screen Recording permission for the fold effect
+- Apple Silicon or Intel (the universal artifact remains a release verification gate)
+
+| Mac | Input mode | Current status and caveat |
+|---|---|---|
+| MacBook exposing Apple HID vendor `0x05AC`, product `0x8104` | Lid angle sensor | Auto-detected. The observed report changes in whole-degree steps and the current `rawToDegrees = 1.0` scale still needs a physical sweep before precision claims. |
+| MacBook without that HID endpoint | Timed fallback | Same renderer, approximately 550 ms close program. Physical M2 MacBook Air acceptance is pending. |
+| Desktop Mac or external-display-only setup | Input unavailable | The effect represents the built-in panel, so no overlay is presented. |
+
+Timed fallback is not angle tracking. A clamshell close that does not produce a sleep
+event may be undetectable, and physical mid-close reversal is unavailable in this mode.
+The current `willSleep` handler immediately seals and releases capture for safety; it
+does not start the 550 ms program there. An earlier public trigger must be demonstrated
+on a real M2 MacBook Air before a visible fallback close can be claimed. S7 remains open.
+
+## Controls
+
+The menu-bar UI exposes Enable, intensity (50–100%), Launch at Login, the
+active input mode, Screen Recording state, a permission-free debug scrubber, Check for
+Updates, and Quit. Intensity changes only blur radius, rotation, and squash gain; it does
+not change thresholds, spring dynamics, timing, or capture behavior.
+
+The debug scrubber uses a generated checkerboard/gradient rather than desktop pixels.
+“Check for Updates” opens the GitHub Releases page in the default browser; the app does
+not make an update request itself.
+
+## Privacy and permissions
+
+lidripple needs **Screen Recording** because ScreenCaptureKit must briefly capture the
+built-in display to freeze the visible desktop before the fold. The overlay is excluded
+from capture. One frame is retained ephemerally for GPU rendering, then released.
+
+- No Accessibility permission
+- No Input Monitoring permission
+- No app-owned network connection
+- No telemetry or analytics
+- No captured pixels written to disk, preferences, diagnostics, or logs
+- No App Sandbox entitlement; distribution therefore uses Developer ID rather than the
+  Mac App Store
+
+The first-run flow explains this before invoking the system permission request. Choosing
+Not Now leaves the menu available. If permission is denied, choose **Screen Recording:
+Needs Permission** in the menu and enable lidripple in **System Settings → Privacy &
+Security → Screen & System Audio Recording**, then reactivate the app.
+
+Protected or DRM video may produce a black captured region. lidripple preserves that
+black result and never tries to bypass content protection.
+
+## Install
+
+There is no published release yet. When the v1.0.0 gates pass, installation will be:
+
+1. Download the notarized `lidripple-1.0.0.dmg` and its SHA-256 file from the matching
+   GitHub Release.
+2. Verify the checksum, open the DMG, and drag `lidripple.app` to Applications.
+3. Launch the app and follow its Screen Recording explanation.
+
+A Homebrew cask will be added only after it can name that exact immutable DMG and exact
+SHA-256; this project never uses `sha256 :no_check`.
+
+To uninstall, turn off Launch at Login in lidripple, quit it, and move
+`/Applications/lidripple.app` to Trash. Remove the app's preferences only if you also
+want to reset onboarding and controls:
+
+```sh
+defaults delete com.lidripple.app
+```
+
+## How the fold works
+
+The input angle is filtered and mapped through hysteretic phases (`idle → armed →
+folding → sealed`). During folding, target progress comes from the angle interval and a
+damped spring adds momentum while remaining reversible. The renderer transforms a
+subdivided panel around its bottom hinge. A vertical coordinate `v` is compressed as
+`v^(1 + squash × progress)`, then perspective-rotated. Progressively stronger,
+position-dependent blur consumes detail; a rising warm-black void, cool rim, vignette,
+and blue-noise dither finish the image. Opening runs the same motion backward when angle
+samples are available, or performs a fresh scripted reveal after unlock.
+
+See the [design specification](docs/superpowers/specs/2026-09-12-lidripple-design.md)
+and [sensor evidence](docs/sensor.md) for the full contracts and known hardware caveats.
+M3 lifecycle evidence is recorded in the
+[integration matrix](docs/verification/2026-09-12-m3-manual-matrix.md). The
+[M4 fidelity report](docs/fidelity/report.json) records the current measured result; the
+comparison artifact remains a release gate until it is lawful to publish and accepted.
+
+## Build and test
+
+Xcode's macOS 14 SDK and the Swift 6 toolchain are required.
+
+```sh
+swift test -Xswiftc -warnings-as-errors
+swift build -c release -Xswiftc -warnings-as-errors
+```
+
+The repository includes the original `Packaging/AppIcon.icns`. Assemble an ad-hoc
+universal app with:
+
+```sh
+scripts/build-app.sh --adhoc-sign
+```
+
+Developer ID signing, notarization, artifact verification, and cask publication are
+maintainer procedures documented in [docs/releasing.md](docs/releasing.md). They require
+real Apple credentials and cannot be replaced by CI or an ad-hoc signature.
+
+## Troubleshooting
+
+- **No animation:** confirm Enable is checked, the built-in display is active, and the
+  menu does not report missing Screen Recording permission.
+- **Permission remains denied after changing Settings:** reactivate or relaunch
+  lidripple so it refreshes TCC state.
+- **Timed fallback selected:** this is expected when the HID endpoint is absent or
+  recovery is exhausted; the mode row should say so explicitly.
+- **Black protected content:** this is expected DRM behavior, not a capture bypass bug.
+- **No Dock icon:** intentional. `LSUIElement` makes lidripple a menu-bar agent.
+- **Sensor motion looks coarse:** current hardware evidence is one-degree quantized and
+  the raw scale remains provisional; include model, macOS version, and a recorded trace
+  in a bug report.
+
+## License and support
+
+lidripple is available under the [MIT License](LICENSE).
+
+If the GitHub Sponsors profile is active, you can [sponsor zjimmm on
+GitHub](https://github.com/sponsors/zjimmm). Sponsors-profile activation is a publishing
+gate and has not been verified by this repository alone.

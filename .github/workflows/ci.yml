@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-package:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Test with warnings as errors
+        run: swift test -Xswiftc -warnings-as-errors
+
+      - name: Release build with warnings as errors
+        run: swift build -c release -Xswiftc -warnings-as-errors
+
+      - name: Validate shipping metadata
+        shell: bash
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          plutil -lint Packaging/Info.plist Packaging/lidripple.entitlements
+          test "$(plutil -extract CFBundleIdentifier raw Packaging/Info.plist)" = "com.lidripple.app"
+          test "$(plutil -extract CFBundleDisplayName raw Packaging/Info.plist)" = "lidripple"
+          test "$(plutil -extract CFBundleName raw Packaging/Info.plist)" = "lidripple"
+          test "$(plutil -extract CFBundleExecutable raw Packaging/Info.plist)" = "lidripple"
+          test "$(plutil -extract CFBundlePackageType raw Packaging/Info.plist)" = "APPL"
+          test "$(plutil -extract CFBundleIconFile raw Packaging/Info.plist)" = "AppIcon"
+          test "$(plutil -extract CFBundleShortVersionString raw Packaging/Info.plist)" = "__LIDRIPPLE_VERSION__"
+          test "$(plutil -extract CFBundleVersion raw Packaging/Info.plist)" = "__LIDRIPPLE_BUILD__"
+          test "$(plutil -extract LSMinimumSystemVersion raw Packaging/Info.plist)" = "14.0"
+          test "$(plutil -extract LSUIElement raw Packaging/Info.plist)" = "true"
+          test "$(plutil -extract NSHighResolutionCapable raw Packaging/Info.plist)" = "true"
+          test "$(plutil -convert json -o - Packaging/lidripple.entitlements)" = "{}"
+          test -s Packaging/AppIcon.icns
+          icon_dir="$RUNNER_TEMP/AppIcon.iconset"
+          iconutil -c iconset Packaging/AppIcon.icns -o "$icon_dir"
+          test "$(sips -g pixelWidth "$icon_dir/icon_512x512@2x.png" | awk '/pixelWidth/ { print $2 }')" = "1024"
+          bash -n scripts/*.sh
+
+      - name: Assemble and verify ad-hoc universal app
+        shell: bash
+        run: |
+          scripts/build-app.sh --adhoc-sign --output "$RUNNER_TEMP/lidripple-dist"
+          app="$RUNNER_TEMP/lidripple-dist/lidripple.app"
+          test "$(lipo -archs "$app/Contents/MacOS/lidripple")" = "x86_64 arm64" || \
+            test "$(lipo -archs "$app/Contents/MacOS/lidripple")" = "arm64 x86_64"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          test "$(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist")" = \
+            "$(tr -d '[:space:]' < VERSION)"
+          test "$(<"$app/Contents/PkgInfo")" = "APPL????"
+          bundle_files="$(find "$app" \( -type f -o -type l \) -print | sed "s|$app/||" | LC_ALL=C sort)"
+          expected_files=$'Contents/Info.plist\nContents/MacOS/lidripple\nContents/PkgInfo\nContents/Resources/AppIcon.icns\nContents/_CodeSignature/CodeResources'
+          test "$bundle_files" = "$expected_files"
+
+      - name: Assemble and inspect unsigned DMG
+        shell: bash
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          artifact_dir="$RUNNER_TEMP/lidripple-artifact"
+          mkdir -p "$artifact_dir"
+          dmg="$artifact_dir/lidripple-$version.dmg"
+          scripts/make-dmg.sh "$RUNNER_TEMP/lidripple-dist/lidripple.app" "$dmg"
+          (cd "$artifact_dir" && shasum -a 256 -c "lidripple-$version.dmg.sha256")
+          hdiutil verify "$dmg"

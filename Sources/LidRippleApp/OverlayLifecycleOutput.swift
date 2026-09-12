@@ -22,6 +22,7 @@ final class OverlayLifecycleOutput: FoldLifecycleOutput {
     func update(_ state: FoldState) { presenter.update(state) }
     func hide() { presenter.hide() }
     func setReducedQuality(_ reduced: Bool) { presenter.setReducedQuality(reduced) }
+    func setTuning(_ tuning: FoldTuning) { presenter.setTuning(tuning) }
 
     func reconfigureForBuiltInDisplay() -> Bool {
         presenter.reconfigureForBuiltInDisplay()

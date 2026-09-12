@@ -54,5 +54,6 @@ public enum FoldCaptureActivity: Equatable, Sendable {
 
 public enum FoldInputAvailability: Equatable, Sendable {
     case sensor
-    case fallbackRequired
+    case timedFallback
+    case unavailable
 }

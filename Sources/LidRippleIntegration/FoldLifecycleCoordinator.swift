@@ -18,7 +18,7 @@ public final class FoldLifecycleCoordinator {
         case .active: break
         }
         guard displayAvailable else { return .displayUnavailable }
-        guard sensorAvailable else { return .sensorUnavailable }
+        guard inputAvailability != .unavailable else { return .inputUnavailable }
         return .active
     }
     public private(set) var lastCaptureErrorDescription: String?
@@ -26,9 +26,7 @@ public final class FoldLifecycleCoordinator {
     public private(set) var reducedQuality = false
     public private(set) var captureActivity: FoldCaptureActivity = .idle
     public private(set) var overlayVisible = false
-    public var inputAvailability: FoldInputAvailability {
-        sensorAvailable ? .sensor : .fallbackRequired
-    }
+    public private(set) var inputAvailability: FoldInputAvailability = .sensor
 
     public var diagnostics: FoldRuntimeDiagnostics {
         FoldRuntimeDiagnostics(
@@ -60,7 +58,6 @@ public final class FoldLifecycleCoordinator {
     private var isEnabled = true
     private var sessionAccess: SessionAccess = .active
     private var displayAvailable = false
-    private var sensorAvailable = true
 
     public init(
         driver: FoldDriver = FoldDriver(),
@@ -89,7 +86,7 @@ public final class FoldLifecycleCoordinator {
         guard isEnabled,
               sessionAccess == .active,
               displayAvailable,
-              sensorAvailable,
+              inputAvailability != .unavailable,
               !requiresScriptedUnfold
         else { return state }
 
@@ -279,17 +276,29 @@ public final class FoldLifecycleCoordinator {
     /// M3 exposes the fallback handoff; M5 binds EventAngleSource to it.
     @discardableResult
     public func sensorUnavailable() -> FoldState {
-        sensorAvailable = false
-        if isEnabled, sessionAccess == .active, !requiresScriptedUnfold {
-            state = driver.reset()
-            invalidateCapture(clearOutput: true, hide: true)
-        }
-        return state
+        setInputAvailability(.unavailable)
     }
 
     @discardableResult
     public func sensorRecovered() -> FoldState {
-        sensorAvailable = true
+        setInputAvailability(.sensor)
+    }
+
+    /// Records the active M5 input implementation independently of user,
+    /// session, display, permission, and capture state. Only `.unavailable`
+    /// disables ingestion; sensor and timed fallback share the same driver.
+    @discardableResult
+    public func setInputAvailability(_ availability: FoldInputAvailability) -> FoldState {
+        let wasAvailable = inputAvailability != .unavailable
+        inputAvailability = availability
+        if availability == .unavailable,
+           wasAvailable,
+           isEnabled,
+           sessionAccess == .active,
+           !requiresScriptedUnfold {
+            state = driver.reset()
+            invalidateCapture(clearOutput: true, hide: true)
+        }
         return state
     }
 
@@ -313,6 +322,12 @@ public final class FoldLifecycleCoordinator {
     public func setReducedQuality(_ reduced: Bool) {
         reducedQuality = reduced
         output?.setReducedQuality(reduced)
+    }
+
+    /// Live presentation tuning. This does not reconstruct the driver, change
+    /// its thresholds/timing, or interact with capture/overlay visibility.
+    public func setTuning(_ tuning: FoldTuning) {
+        output?.setTuning(tuning)
     }
 
     public func shutdown() async {

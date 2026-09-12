@@ -16,7 +16,13 @@ public protocol FoldPresentation: AnyObject {
     func useFallbackSource() throws
     func clearSource()
     func setReducedQuality(_ reduced: Bool)
+    func setTuning(_ tuning: FoldTuning)
     func update(_ state: FoldState)
+}
+
+public extension FoldPresentation {
+    /// Non-rendering test presentations may ignore tuning.
+    func setTuning(_ tuning: FoldTuning) {}
 }
 
 /// Native-scale, vsynced presentation adapter for `FoldRenderer`.
@@ -126,6 +132,8 @@ public final class FoldMetalView: MTKView, MTKViewDelegate, FoldPresentation {
         )
         if hasSource { draw() }
     }
+
+    public func setTuning(_ tuning: FoldTuning) { updateTuning(tuning) }
 
     public func setReducedQuality(_ reduced: Bool) {
         foldRenderer.setReducedQuality(reduced)

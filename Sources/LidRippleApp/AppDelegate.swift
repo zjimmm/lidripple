@@ -1,175 +1,121 @@
 import AppKit
 import CoreGraphics
-import LidRippleCapture
-import LidRippleCore
+import LidRippleAppSupport
 import LidRippleIntegration
-import LidRippleOverlay
-import LidRippleSensor
 
+/// Thin AppKit bridge. Product policy and ownership live in AppCoordinator so
+/// notification ordering can be tested without a real TCC prompt or desktop.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var statusItem: NSStatusItem?
-    private var sensor: HIDAngleSource?
-    private var output: OverlayLifecycleOutput?
-    private var lifecycle: FoldLifecycleCoordinator?
-    private var animationTimer: Timer?
-    private var sensorRecoveryTask: Task<Void, Never>?
-    private let sensorRecovery = SensorRecovery()
-    private var sensorGeneration: UInt64 = 0
+    private var coordinator: AppCoordinator?
+    private var unavailableStatusItem: NSStatusItem?
+    private var isObservingSystemNotifications = false
     private var terminationCleanupStarted = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Equivalent to LSUIElement for this unbundled package executable: no
-        // Dock icon or normal application menu. Bundle metadata arrives in M5.
+        // Info.plist supplies LSUIElement in the installed bundle; this keeps
+        // direct SwiftPM launches agent-only as defense in depth.
         NSApp.setActivationPolicy(.accessory)
 
-        configurePipeline()
-        setUpStatusItem()
+        // Observe display changes even when the built-in screen is temporarily
+        // unavailable (for example, when launched in closed clamshell mode).
+        // In that state the menu must remain usable and construction can be
+        // retried when the display returns.
         observeSystemNotifications()
-        updateQualityMode()
+        attemptStartup()
+    }
 
-        if currentSessionAccess() == .restricted {
-            lifecycle?.sessionLocked()
-        } else {
-            _ = startSensorIfAvailable()
-        }
+    func applicationDidBecomeActive(_ notification: Notification) {
+        coordinator?.applicationDidBecomeActive()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard !terminationCleanupStarted else { return .terminateNow }
         terminationCleanupStarted = true
-        animationTimer?.invalidate()
-        sensorRecoveryTask?.cancel()
-        stopSensor()
+        guard let coordinator else { return .terminateNow }
 
-        guard let lifecycle else { return .terminateNow }
         Task { @MainActor in
-            await lifecycle.shutdown()
+            await coordinator.shutdown()
             sender.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        animationTimer?.invalidate()
-        sensorRecoveryTask?.cancel()
-        stopSensor()
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         DistributedNotificationCenter.default().removeObserver(self)
         NotificationCenter.default.removeObserver(self)
+        removeUnavailableStatusItem()
     }
 
-    private func configurePipeline() {
-        guard let presenter = OverlayPresenter() else {
-            print("No built-in display or Metal renderer is available; lidripple is disabled.")
-            return
-        }
-
+    private func attemptStartup() {
+        guard coordinator == nil, !terminationCleanupStarted else { return }
         do {
-            let capture = try CaptureCoordinator()
-            let output = OverlayLifecycleOutput(presenter: presenter)
-            self.output = output
-            lifecycle = FoldLifecycleCoordinator(
-                capture: capture,
-                output: output,
-                displayID: { BuiltInDisplay.displayID() }
+            let coordinator = try AppCoordinator.production(
+                terminateApplication: { NSApp.terminate(nil) },
+                reportError: { [weak self] message in self?.presentError(message) }
             )
+            self.coordinator = coordinator
+            removeUnavailableStatusItem()
+            updateQualityMode()
+            coordinator.start(sessionAccess: currentSessionAccess())
         } catch {
-            print("Screen capture is unavailable: \(error)")
+            // Do not repeatedly display modal alerts as displays reconnect.
+            // An accessory app with no product menu would otherwise be stranded.
+            installUnavailableStatusItem(reason: error)
         }
     }
 
-    private func setUpStatusItem() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.title = "◐"
+    private func installUnavailableStatusItem(reason: Error) {
+        let item: NSStatusItem
+        if let unavailableStatusItem {
+            item = unavailableStatusItem
+        } else {
+            item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+            item.button?.title = "◐"
+            item.button?.setAccessibilityLabel("lidripple unavailable")
+            unavailableStatusItem = item
+        }
+        let reasonText: String
+        switch reason as? AppCoordinatorConstructionError {
+        case .noBuiltInDisplayOrMetalRenderer:
+            reasonText = "Built-in display or Metal renderer unavailable"
+        case .captureUnavailable:
+            reasonText = "Screen capture is unavailable"
+        case nil:
+            reasonText = "Unable to start: \(reason.localizedDescription)"
+        }
+        item.button?.toolTip = "lidripple: \(reasonText)"
 
         let menu = NSMenu()
-        let quitItem = NSMenuItem(
-            title: "Quit lidripple",
-            action: #selector(quit),
-            keyEquivalent: "q"
-        )
-        quitItem.target = self
-        menu.addItem(quitItem)
+        let status = NSMenuItem(title: "lidripple unavailable", action: nil, keyEquivalent: "")
+        status.isEnabled = false
+        menu.addItem(status)
+        let detail = NSMenuItem(title: reasonText, action: nil, keyEquivalent: "")
+        detail.isEnabled = false
+        menu.addItem(detail)
+        menu.addItem(.separator())
+        let retry = NSMenuItem(title: "Retry", action: #selector(retryStartup), keyEquivalent: "r")
+        retry.target = self
+        menu.addItem(retry)
+        let quit = NSMenuItem(title: "Quit lidripple", action: #selector(quit), keyEquivalent: "q")
+        quit.target = self
+        menu.addItem(quit)
         item.menu = menu
-        statusItem = item
     }
 
-    @objc private func quit() {
-        NSApp.terminate(nil)
+    private func removeUnavailableStatusItem() {
+        guard let unavailableStatusItem else { return }
+        NSStatusBar.system.removeStatusItem(unavailableStatusItem)
+        self.unavailableStatusItem = nil
     }
 
-    @discardableResult
-    private func startSensorIfAvailable(reportUnavailable: Bool = true) -> Bool {
-        stopSensor()
-
-        let generation = sensorGeneration
-        let source = HIDAngleSource { [weak self] in
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.sensorGeneration == generation else { return }
-                self.lifecycle?.sensorUnavailable()
-                self.recoverSensorAfterWake()
-            }
-        }
-        guard source.isAvailable else {
-            if reportUnavailable {
-                lifecycle?.sensorUnavailable()
-                print(SensorProbe.probe().description)
-            }
-            return false
-        }
-
-        do {
-            try source.start { [weak self] sample in
-                // HID callbacks arrive on a private serial queue; dispatching to
-                // the main actor preserves their order for the pure driver.
-                DispatchQueue.main.async { [weak self] in
-                    guard let self,
-                          self.sensorGeneration == generation,
-                          let lifecycle = self.lifecycle
-                    else { return }
-                    let state = lifecycle.ingest(sample)
-                    self.updateAnimationTimer(for: state)
-                }
-            }
-            sensor = source
-            lifecycle?.sensorRecovered()
-            return true
-        } catch {
-            if reportUnavailable {
-                lifecycle?.sensorUnavailable()
-                print("Failed to start the lid angle sensor: \(error)")
-            }
-            return false
-        }
-    }
-
-    private func recoverSensorAfterWake() {
-        sensorRecoveryTask?.cancel()
-        stopSensor()
-
-        sensorRecoveryTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            do {
-                let outcome = try await self.sensorRecovery.run {
-                    self.startSensorIfAvailable(reportUnavailable: false)
-                }
-                if case .fallbackRequired = outcome {
-                    // M5 observes this state and binds EventAngleSource. M3
-                    // guarantees the failed HID cycle leaves no capture or
-                    // visible overlay behind.
-                    self.lifecycle?.sensorUnavailable()
-                }
-            } catch is CancellationError {
-                return
-            } catch {
-                print("Sensor recovery failed: \(error)")
-            }
-            self.sensorRecoveryTask = nil
-        }
-    }
+    @objc private func retryStartup() { attemptStartup() }
+    @objc private func quit() { NSApp.terminate(nil) }
 
     private func observeSystemNotifications() {
+        guard !isObservingSystemNotifications else { return }
+        isObservingSystemNotifications = true
         let workspace = NSWorkspace.shared.notificationCenter
         workspace.addObserver(
             self,
@@ -230,124 +176,73 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    @objc private func willSleep() {
-        stopAnimationTimer()
-        sensorRecoveryTask?.cancel()
-        stopSensor()
-        lifecycle?.systemWillSleep()
-    }
+    @objc private func willSleep() { coordinator?.systemWillSleep() }
 
     @objc private func didWake() {
-        recoverSensorAfterWake()
-        // Only a positively unlocked session may reveal here. If the private
-        // screen-lock dictionary key is absent, wait for the explicit
-        // com.apple.screenIsUnlocked notification instead of risking drawing
-        // above loginwindow.
-        if currentSessionAccess() == .active { beginUnlockReveal() }
-    }
-
-    @objc private func screenDidLock() {
-        stopAnimationTimer()
-        sensorRecoveryTask?.cancel()
-        stopSensor()
-        lifecycle?.sessionLocked()
-    }
-
-    @objc private func screenDidUnlock() {
-        beginUnlockReveal()
-        recoverSensorAfterWake()
-    }
-
-    private func beginUnlockReveal() {
-        stopAnimationTimer()
         Task { @MainActor [weak self] in
-            guard let self, let lifecycle = self.lifecycle else { return }
-            let state = await lifecycle.sessionUnlocked()
-            self.updateAnimationTimer(for: state)
+            guard let self else { return }
+            await self.coordinator?.systemDidWake(sessionAccess: self.currentSessionAccess())
         }
     }
 
-    @objc private func sessionResignedActive() {
-        stopAnimationTimer()
-        sensorRecoveryTask?.cancel()
-        stopSensor()
-        lifecycle?.sessionResignedActive()
+    @objc private func screenDidLock() { coordinator?.screenDidLock() }
+
+    @objc private func screenDidUnlock() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let session = self.currentSessionSnapshot()
+            await self.coordinator?.screenDidUnlock(
+                sessionAccess: session.access,
+                onConsole: session.onConsole
+            )
+        }
     }
 
+    @objc private func sessionResignedActive() { coordinator?.sessionResignedActive() }
     @objc private func sessionBecameActive() {
-        lifecycle?.sessionBecameActive()
-        recoverSensorAfterWake()
+        coordinator?.sessionBecameActive(sessionAccess: currentSessionAccess())
     }
-
     @objc private func displayConfigurationChanged() {
-        stopAnimationTimer()
-        let state = lifecycle?.displayConfigurationChanged()
-        updateAnimationTimer(for: state)
+        if let coordinator {
+            coordinator.displayConfigurationChanged()
+        } else {
+            attemptStartup()
+        }
     }
-
-    @objc private func qualityEnvironmentChanged() {
-        updateQualityMode()
-    }
+    @objc private func qualityEnvironmentChanged() { updateQualityMode() }
 
     private func updateQualityMode() {
         let info = ProcessInfo.processInfo
         let thermalPressure = info.thermalState == .serious || info.thermalState == .critical
-        lifecycle?.setReducedQuality(thermalPressure || info.isLowPowerModeEnabled)
-    }
-
-    private func updateAnimationTimer(for state: FoldState?) {
-        guard let state else { return }
-        switch state.phase {
-        case .folding, .unfolding:
-            startAnimationTimerIfNeeded()
-        case .idle, .armed, .sealed:
-            stopAnimationTimer()
-        }
-    }
-
-    private func startAnimationTimerIfNeeded() {
-        guard animationTimer == nil else { return }
-        let timer = Timer(
-            timeInterval: 1.0 / 60.0,
-            target: self,
-            selector: #selector(animationTick),
-            userInfo: nil,
-            repeats: true
-        )
-        animationTimer = timer
-        RunLoop.main.add(timer, forMode: .common)
-    }
-
-    private func stopAnimationTimer() {
-        animationTimer?.invalidate()
-        animationTimer = nil
-    }
-
-    @objc private func animationTick(_ timer: Timer) {
-        guard let lifecycle else {
-            stopAnimationTimer()
-            return
-        }
-        let state = lifecycle.tick(now: ProcessInfo.processInfo.systemUptime)
-        updateAnimationTimer(for: state)
+        coordinator?.setReducedQuality(thermalPressure || info.isLowPowerModeEnabled)
     }
 
     private func currentSessionAccess() -> ConsoleSessionAccess {
+        currentSessionSnapshot().access
+    }
+
+    /// Read both predicates from one dictionary so a fast lock/switch cannot
+    /// produce an internally inconsistent unlock-notification snapshot.
+    private func currentSessionSnapshot() -> (access: ConsoleSessionAccess, onConsole: Bool) {
         guard let dictionary = CGSessionCopyCurrentDictionary() as? [String: Any] else {
-            return .unknown
+            return (.unknown, false)
         }
-        // The first key is a CGSession.h CFSTR macro (not imported by Swift).
-        // The second is emitted by WindowServer but not declared in the public
-        // SDK; treating its absence as unknown is the fail-closed wake policy.
-        return .resolve(
-            onConsole: dictionary["kCGSSessionOnConsoleKey"] as? Bool,
-            screenLocked: dictionary["CGSSessionScreenIsLocked"] as? Bool
+        let onConsole = dictionary["kCGSSessionOnConsoleKey"] as? Bool
+        return (
+            .resolve(
+                onConsole: onConsole,
+                screenLocked: dictionary["CGSSessionScreenIsLocked"] as? Bool
+            ),
+            onConsole == true
         )
     }
 
-    private func stopSensor() {
-        sensorGeneration &+= 1
-        sensor?.stop()
-        sensor = nil
+    private func presentError(_ message: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "lidripple"
+        alert.informativeText = message
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 }

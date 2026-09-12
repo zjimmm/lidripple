@@ -29,10 +29,18 @@ public protocol FoldLifecycleOutput: AnyObject {
     func update(_ state: FoldState)
     func hide()
     func setReducedQuality(_ reduced: Bool)
+    /// Applies final fidelity tuning plus the user's FR-17 intensity scaling.
+    /// This is presentation-only and must not start capture or reveal a window.
+    func setTuning(_ tuning: FoldTuning)
 
     /// Moves the one owned overlay to the current built-in display. Returns
     /// false when no built-in display is currently available.
     func reconfigureForBuiltInDisplay() -> Bool
+}
+
+public extension FoldLifecycleOutput {
+    /// Compatibility default for non-rendering diagnostic/test outputs.
+    func setTuning(_ tuning: FoldTuning) {}
 }
 
 public enum FoldLifecycleAvailability: Equatable, Sendable {
@@ -40,6 +48,6 @@ public enum FoldLifecycleAvailability: Equatable, Sendable {
     case locked
     case sessionInactive
     case displayUnavailable
-    case sensorUnavailable
+    case inputUnavailable
     case disabled
 }

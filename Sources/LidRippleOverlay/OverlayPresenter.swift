@@ -14,6 +14,7 @@ public final class OverlayPresenter {
     private let window: OverlayWindow
     private let presentation: any FoldPresentation
     private var fallbackReveal = false
+    private var debugPreview = false
 
     /// WindowServer identifier used to exclude the overlay from screen capture.
     public var windowID: CGWindowID { CGWindowID(window.windowNumber) }
@@ -95,6 +96,55 @@ public final class OverlayPresenter {
     /// Low-power and thermal-pressure mode changes blur taps, never cadence.
     public func setReducedQuality(_ reduced: Bool) {
         presentation.setReducedQuality(reduced)
+    }
+
+    /// Applies presentation-only tuning without changing capture or visibility.
+    public func setTuning(_ tuning: FoldTuning) {
+        presentation.setTuning(tuning)
+    }
+
+    /// Installs generated pixels for the permission-free debug scrubber. This
+    /// path never invokes ScreenCaptureKit and cannot contain desktop content.
+    public func beginDebugPreview(tuning: FoldTuning) throws {
+        guard let foldView = presentation as? FoldMetalView,
+              let device = foldView.device
+        else { throw RendererError.metalUnavailable }
+
+        let scale = window.screen?.backingScaleFactor ?? 1
+        let size = presentation.view.bounds.size
+        let width = max(Int((size.width * scale).rounded()), 1)
+        let height = max(Int((size.height * scale).rounded()), 1)
+        let source = try SyntheticFrame.makeCheckerboardGradientTexture(
+            device: device,
+            width: width,
+            height: height
+        )
+        foldView.updateTuning(tuning)
+        try foldView.setPreviewSource(source)
+        fallbackReveal = false
+        debugPreview = true
+        updateDebugPreview(progress: 0, direction: 1)
+    }
+
+    public func updateDebugPreview(progress: Double, direction: Double) {
+        guard debugPreview else { return }
+        let clamped = min(max(progress, 0), FoldTuning.default.maxProgress)
+        let phase: FoldPhase
+        if clamped >= 1 {
+            phase = .sealed
+        } else {
+            phase = direction < 0 ? .unfolding : .folding
+        }
+        presentation.update(FoldState(phase: phase, progress: clamped, velocity: direction))
+        window.alphaValue = 1
+        window.orderFrontRegardless()
+    }
+
+    public func endDebugPreview() {
+        guard debugPreview else { return }
+        debugPreview = false
+        clearSource()
+        window.orderOut(nil)
     }
 
     public func update(_ state: FoldState) {

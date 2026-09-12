@@ -266,9 +266,12 @@ struct FoldLifecycleCoordinatorTests {
 
         #expect(coordinator.sensorUnavailable().phase == .idle)
         await coordinator.waitForPendingCapture()
-        #expect(coordinator.availability == .sensorUnavailable)
+        #expect(coordinator.availability == .inputUnavailable)
         #expect(coordinator.sensorRecovered().phase == .idle)
         #expect(coordinator.availability == .active)
+        #expect(coordinator.setInputAvailability(.timedFallback).phase == .idle)
+        #expect(coordinator.availability == .active)
+        #expect(coordinator.diagnostics.inputAvailability == .timedFallback)
     }
 
     @Test func sensorAndDisplayRecoveryCannotOverrideLockAuthority() async throws {
@@ -284,7 +287,7 @@ struct FoldLifecycleCoordinatorTests {
         coordinator.sessionLocked()
         coordinator.sensorUnavailable()
         #expect(coordinator.availability == .locked)
-        #expect(coordinator.diagnostics.inputAvailability == .fallbackRequired)
+        #expect(coordinator.diagnostics.inputAvailability == .unavailable)
         #expect(coordinator.diagnostics.sessionRestricted)
 
         display.value = nil
@@ -300,7 +303,7 @@ struct FoldLifecycleCoordinatorTests {
 
         let unlocked = await coordinator.sessionUnlocked(now: { 2 })
         #expect(unlocked.phase == .unfolding)
-        #expect(coordinator.availability == .sensorUnavailable)
+        #expect(coordinator.availability == .inputUnavailable)
         #expect(output.sourceCount == 1)
     }
 

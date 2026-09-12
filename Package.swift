@@ -13,6 +13,7 @@ let package = Package(
         .library(name: "LidRippleCapture", targets: ["LidRippleCapture"]),
         .library(name: "LidRippleRenderer", targets: ["LidRippleRenderer"]),
         .library(name: "LidRippleIntegration", targets: ["LidRippleIntegration"]),
+        .library(name: "LidRippleAppSupport", targets: ["LidRippleAppSupport"]),
         .executable(name: "lidripple-preview", targets: ["lidripple-preview"]),
         .executable(name: "lidripple-fidelity", targets: ["lidripple-fidelity"]),
     ],
@@ -40,6 +41,26 @@ let package = Package(
                 "LidRippleSensor",
                 "LidRippleOverlay",
                 "LidRippleCapture",
+                "LidRippleIntegration",
+                "LidRippleAppSupport",
+            ]
+        ),
+        .target(
+            name: "LidRippleAppSupport",
+            dependencies: [
+                "LidRippleCapture",
+                "LidRippleCore",
+                "LidRippleIntegration",
+                "LidRippleOverlay",
+                "LidRippleSensor",
+            ]
+        ),
+        .testTarget(
+            name: "LidRippleAppSupportTests",
+            dependencies: [
+                "LidRippleAppSupport",
+                "LidRippleCapture",
+                "LidRippleCore",
                 "LidRippleIntegration",
             ]
         ),
