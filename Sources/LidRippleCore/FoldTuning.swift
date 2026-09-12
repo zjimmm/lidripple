@@ -53,6 +53,17 @@ public struct FoldTuning: Codable, Equatable, Sendable {
     public var voidSoftness: Double = 0.28
     public var rimWidth: Double = 0.012
     public var rimIntensity: Double = 0.35
+    public var rimWidening: Double = 1.8
+    public var fieldOfViewDegrees: Double = 38
+    public var eyeDistanceScreenHeights: Double = 1.1
+    public var eyeVerticalOffset: Double = 0.06
+    public var warmBlackRed: Double = 0.012
+    public var warmBlackGreen: Double = 0.009
+    public var warmBlackBlue: Double = 0.015
+    public var coolTintStrength: Double = 0.08
+    public var vignetteStrength: Double = 0.18
+    public var ditherAmplitude: Double = 1.5 / 255.0
+    public var blurExtraTapDistance: Double = 0.65
 
     // MARK: User control
     public var intensity: Double = 1.0
@@ -107,6 +118,17 @@ public struct FoldTuning: Codable, Equatable, Sendable {
             case "voidSoftness": voidSoftness = value
             case "rimWidth": rimWidth = value
             case "rimIntensity": rimIntensity = value
+            case "rimWidening": rimWidening = value
+            case "fieldOfViewDegrees": fieldOfViewDegrees = value
+            case "eyeDistanceScreenHeights": eyeDistanceScreenHeights = value
+            case "eyeVerticalOffset": eyeVerticalOffset = value
+            case "warmBlackRed": warmBlackRed = value
+            case "warmBlackGreen": warmBlackGreen = value
+            case "warmBlackBlue": warmBlackBlue = value
+            case "coolTintStrength": coolTintStrength = value
+            case "vignetteStrength": vignetteStrength = value
+            case "ditherAmplitude": ditherAmplitude = value
+            case "blurExtraTapDistance": blurExtraTapDistance = value
             case "intensity": intensity = value
             default: throw FoldTuningError.unknownKey(key)
             }

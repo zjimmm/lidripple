@@ -21,6 +21,9 @@ import Foundation
     #expect(t.rotationDegrees == 72)
     #expect(t.blurRadiusPx == 28)
     #expect(t.voidSpeed == 1.15)
+    #expect(t.fieldOfViewDegrees == 38)
+    #expect(t.eyeDistanceScreenHeights == 1.1)
+    #expect(t.ditherAmplitude == 1.5 / 255.0)
     #expect(t.intensity == 1.0)
 }
 
@@ -45,6 +48,55 @@ import Foundation
     #expect(soft.damping == base.damping)
     #expect(soft.substepSeconds == base.substepSeconds)
     #expect(soft.directionHoldSeconds == base.directionHoldSeconds)
+    #expect(soft.fieldOfViewDegrees == base.fieldOfViewDegrees)
+    #expect(soft.rimIntensity == base.rimIntensity)
+    #expect(soft.coolTintStrength == base.coolTintStrength)
+}
+
+@Test func everyRenderOverrideIsApplied() throws {
+    let overrides: [String: Double] = [
+        "squashExponentGain": 1.1,
+        "rotationDegrees": 60,
+        "blurRadiusPx": 20,
+        "blurProgressExponent": 1.7,
+        "voidSpeed": 1.0,
+        "voidSoftness": 0.2,
+        "rimWidth": 0.02,
+        "rimIntensity": 0.25,
+        "rimWidening": 2.2,
+        "fieldOfViewDegrees": 42,
+        "eyeDistanceScreenHeights": 1.3,
+        "eyeVerticalOffset": 0.1,
+        "warmBlackRed": 0.01,
+        "warmBlackGreen": 0.02,
+        "warmBlackBlue": 0.03,
+        "coolTintStrength": 0.12,
+        "vignetteStrength": 0.22,
+        "ditherAmplitude": 0.004,
+        "blurExtraTapDistance": 0.8,
+    ]
+    var tuning = FoldTuning.default
+    try tuning.apply(overrides: overrides)
+
+    #expect(tuning.squashExponentGain == 1.1)
+    #expect(tuning.rotationDegrees == 60)
+    #expect(tuning.blurRadiusPx == 20)
+    #expect(tuning.blurProgressExponent == 1.7)
+    #expect(tuning.voidSpeed == 1.0)
+    #expect(tuning.voidSoftness == 0.2)
+    #expect(tuning.rimWidth == 0.02)
+    #expect(tuning.rimIntensity == 0.25)
+    #expect(tuning.rimWidening == 2.2)
+    #expect(tuning.fieldOfViewDegrees == 42)
+    #expect(tuning.eyeDistanceScreenHeights == 1.3)
+    #expect(tuning.eyeVerticalOffset == 0.1)
+    #expect(tuning.warmBlackRed == 0.01)
+    #expect(tuning.warmBlackGreen == 0.02)
+    #expect(tuning.warmBlackBlue == 0.03)
+    #expect(tuning.coolTintStrength == 0.12)
+    #expect(tuning.vignetteStrength == 0.22)
+    #expect(tuning.ditherAmplitude == 0.004)
+    #expect(tuning.blurExtraTapDistance == 0.8)
 }
 
 @Test func intensityClampsToTheSupportedRange() {
