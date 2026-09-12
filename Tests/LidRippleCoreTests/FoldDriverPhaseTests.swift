@@ -70,6 +70,31 @@ private func hold(
     #expect(driver.state.phase == .sealed)
 }
 
+@Test func physicalSealCanReopenAngleTrackedInClamshellMode() {
+    let driver = FoldDriver()
+    let (_, sealedAt) = sweep(
+        driver,
+        from: 120,
+        to: 8,
+        degreesPerSecond: 120,
+        startingAt: 0
+    )
+    #expect(driver.state.phase == .sealed)
+
+    sweep(driver, from: 8, to: 35, degreesPerSecond: 120, startingAt: sealedAt)
+    #expect(driver.state.phase == .unfolding)
+    #expect(driver.state.progress < 1)
+}
+
+@Test func systemSealIgnoresAngleUntilExplicitUnlockOrReset() {
+    let driver = FoldDriver()
+    driver.signalSleep()
+    sweep(driver, from: 8, to: 100, degreesPerSecond: 120, startingAt: 0)
+
+    #expect(driver.state.phase == .sealed)
+    #expect(driver.state.progress == 1)
+}
+
 @Test func aSingleOpeningSampleDoesNotReverseTheFold() {
     let driver = FoldDriver()
     let (_, t) = sweep(driver, from: 120, to: 50, degreesPerSecond: 120, startingAt: 0)

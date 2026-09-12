@@ -21,6 +21,7 @@ enum FoldShaderLibrary {
         float4 finish;
         float4 dimensions;
         float4 colorAndTap;
+        float4 quality;
     };
 
     struct FoldVaryings {
@@ -81,17 +82,20 @@ enum FoldShaderLibrary {
         const float maxLOD = max(float(source.get_num_mip_levels()) - 1.0f, 0.0f);
         const float lod = clamp(log2(max(radius, 1.0f)), 0.0f, maxLOD);
         const float tapOffset = uniforms.colorAndTap.w * radius / max(sourceHeight, 1.0f);
-        float4 color = source.sample(sourceSampler, input.textureCoordinate, level(lod)) * 0.72f;
-        color += source.sample(
-            sourceSampler,
-            input.textureCoordinate + float2(0.0f, tapOffset),
-            level(lod)
-        ) * 0.14f;
-        color += source.sample(
-            sourceSampler,
-            input.textureCoordinate - float2(0.0f, tapOffset),
-            level(lod)
-        ) * 0.14f;
+        float4 color = source.sample(sourceSampler, input.textureCoordinate, level(lod));
+        if (uniforms.quality.x < 0.5f) {
+            color *= 0.72f;
+            color += source.sample(
+                sourceSampler,
+                input.textureCoordinate + float2(0.0f, tapOffset),
+                level(lod)
+            ) * 0.14f;
+            color += source.sample(
+                sourceSampler,
+                input.textureCoordinate - float2(0.0f, tapOffset),
+                level(lod)
+            ) * 0.14f;
+        }
 
         const float horizon = uniforms.voidAndRim.x * progress;
         const float softness = max(uniforms.voidAndRim.y, 0.0001f);

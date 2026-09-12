@@ -23,6 +23,9 @@ public final class FoldDriver {
     /// Set while a scripted (angle-free) unfold is running. Spec FR-10.
     private var scriptedUnfoldStart: TimeInterval?
     private var lastTarget: Double = 0
+    /// A physical seal can reverse in clamshell mode; a sleep/lock seal cannot
+    /// consume angle input until the lifecycle explicitly resets or unlocks it.
+    private var sealedBySystem = false
 
     public private(set) var state: FoldState = .idle
 
@@ -58,6 +61,7 @@ public final class FoldDriver {
     @discardableResult
     public func signalSleep() -> FoldState {
         phase = .sealed
+        sealedBySystem = true
         spring.reset(to: 1.0)
         // Clear any in-flight scripted unfold: otherwise the next `tick(now:)`
         // would still take the `scriptedUnfoldStart` branch and drive `phase`
@@ -76,6 +80,7 @@ public final class FoldDriver {
         clearGate()
         scriptedUnfoldStart = nil
         lastTarget = 0
+        sealedBySystem = false
         state = .idle
         return state
     }
@@ -131,6 +136,7 @@ public final class FoldDriver {
         case .folding:
             if angle < tuning.sealAngle {
                 phase = .sealed
+                sealedBySystem = false
                 spring.reset(to: 1.0)
             } else if directionCommitted(closing: false, angle: angle, now: now) {
                 phase = .unfolding
@@ -143,7 +149,10 @@ public final class FoldDriver {
                 spring.reset(to: 0)
             }
         case .sealed:
-            break  // only signalSleep, reset, or the unlock path leave sealed
+            if !sealedBySystem,
+               directionCommitted(closing: false, angle: angle, now: now) {
+                phase = .unfolding
+            }
         }
     }
 
@@ -231,6 +240,7 @@ public final class FoldDriver {
     @discardableResult
     public func beginScriptedUnfold(now: TimeInterval) -> FoldState {
         phase = .unfolding
+        sealedBySystem = false
         scriptedUnfoldStart = now
         lastTimestamp = now
         spring.reset(to: 1.0)

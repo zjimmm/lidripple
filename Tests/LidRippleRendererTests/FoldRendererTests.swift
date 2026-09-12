@@ -107,6 +107,52 @@ import LidRippleCore
     #expect(context.renderer.pyramidBuildCount == 1)
 }
 
+@Test func reducedQualityChangesFragmentTapCountWithoutRebuildingSource() throws {
+    let context = try RendererTestContext()
+    let source = try context.makeSolidTexture(width: 32, height: 20, bgra: [180, 180, 180, 255])
+    try context.renderer.setSource(texture: source)
+
+    #expect(context.renderer.fragmentBlurTapCount == 3)
+    context.renderer.setReducedQuality(true)
+    #expect(context.renderer.isReducedQuality)
+    #expect(context.renderer.fragmentBlurTapCount == 1)
+    #expect(context.renderer.pyramidBuildCount == 1)
+
+    context.renderer.setReducedQuality(false)
+    #expect(context.renderer.fragmentBlurTapCount == 3)
+    #expect(context.renderer.pyramidBuildCount == 1)
+}
+
+@Test func fallbackSourceReplacesPreviouslyCapturedPixelsWithWarmBlack() throws {
+    var tuning = FoldTuning.default
+    tuning.rotationDegrees = 0
+    tuning.squashExponentGain = 0
+    tuning.blurRadiusPx = 0
+    tuning.voidSpeed = 0
+    tuning.rimIntensity = 0
+    tuning.coolTintStrength = 0
+    tuning.vignetteStrength = 0
+    tuning.ditherAmplitude = 0
+    let context = try RendererTestContext(tuning: tuning)
+    let captured = try context.makeSolidTexture(width: 8, height: 8, bgra: [0, 0, 255, 255])
+    try context.renderer.setSource(texture: captured)
+
+    try context.renderer.useFallbackSource()
+    let rendered = try context.render(progress: 0, width: 8, height: 8)
+    let expected = [
+        UInt8((tuning.warmBlackBlue * 255).rounded()),
+        UInt8((tuning.warmBlackGreen * 255).rounded()),
+        UInt8((tuning.warmBlackRed * 255).rounded()),
+        UInt8.max,
+    ]
+
+    #expect(Array(rendered[0..<4]) == expected)
+    #expect(stride(from: 0, to: rendered.count, by: 4).allSatisfy { offset in
+        Array(rendered[offset..<(offset + 4)]) == expected
+    })
+    #expect(context.renderer.pyramidBuildCount == 2)
+}
+
 private func warmBlackPixelCount(_ bytes: [UInt8]) -> Int {
     stride(from: 0, to: bytes.count, by: 4).reduce(into: 0) { count, offset in
         if bytes[offset] < 8, bytes[offset + 1] < 8, bytes[offset + 2] < 8 {

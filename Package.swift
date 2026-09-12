@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "LidRippleOverlay", targets: ["LidRippleOverlay"]),
         .library(name: "LidRippleCapture", targets: ["LidRippleCapture"]),
         .library(name: "LidRippleRenderer", targets: ["LidRippleRenderer"]),
+        .library(name: "LidRippleIntegration", targets: ["LidRippleIntegration"]),
         .executable(name: "lidripple-preview", targets: ["lidripple-preview"]),
     ],
     targets: [
@@ -33,7 +34,13 @@ let package = Package(
         ),
         .executableTarget(
             name: "LidRippleApp",
-            dependencies: ["LidRippleCore", "LidRippleSensor", "LidRippleOverlay"]
+            dependencies: [
+                "LidRippleCore",
+                "LidRippleSensor",
+                "LidRippleOverlay",
+                "LidRippleCapture",
+                "LidRippleIntegration",
+            ]
         ),
         .testTarget(name: "LidRippleOverlayTests", dependencies: ["LidRippleOverlay"]),
         .target(name: "LidRippleCapture"),
@@ -44,6 +51,14 @@ let package = Package(
         .target(
             name: "LidRippleRenderer",
             dependencies: ["LidRippleCore", "LidRippleCapture"]
+        ),
+        .target(
+            name: "LidRippleIntegration",
+            dependencies: ["LidRippleCore", "LidRippleCapture"]
+        ),
+        .testTarget(
+            name: "LidRippleIntegrationTests",
+            dependencies: ["LidRippleIntegration", "LidRippleCapture", "LidRippleTrace"]
         ),
         .testTarget(
             name: "LidRippleRendererTests",

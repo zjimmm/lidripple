@@ -13,6 +13,14 @@ public final class FoldRenderer {
         defer { stateLock.unlock() }
         return currentTuning
     }
+    public var isReducedQuality: Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return currentReducedQuality
+    }
+
+    /// Number of source samples used by the fold fragment's blur path.
+    public var fragmentBlurTapCount: Int { isReducedQuality ? 1 : 3 }
 
     private let commandQueue: any MTLCommandQueue
     private let renderPipeline: any MTLRenderPipelineState
@@ -26,6 +34,7 @@ public final class FoldRenderer {
     private let inFlightSemaphore = DispatchSemaphore(value: 3)
     private let stateLock = NSLock()
     private var currentTuning: FoldTuning
+    private var currentReducedQuality = false
     private var nextUniformBuffer = 0
     private var pyramid: TexturePyramid?
     private(set) var pyramidBuildCount = 0
@@ -154,11 +163,57 @@ public final class FoldRenderer {
         stateLock.unlock()
     }
 
+    /// Replaces any captured source with an in-memory warm-black texture.
+    /// Clearing first ensures a failed allocation can never expose stale user content.
+    public func useFallbackSource() throws {
+        clearSource()
+
+        let tuning = self.tuning
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .bgra8Unorm,
+            width: 1,
+            height: 1,
+            mipmapped: false
+        )
+        descriptor.storageMode = .shared
+        descriptor.usage = [.shaderRead]
+        guard let texture = device.makeTexture(descriptor: descriptor) else {
+            throw RendererError.textureAllocationFailed
+        }
+
+        func byte(_ value: Double) -> UInt8 {
+            UInt8((min(max(value, 0), 1) * 255).rounded())
+        }
+        let pixel = [
+            byte(tuning.warmBlackBlue),
+            byte(tuning.warmBlackGreen),
+            byte(tuning.warmBlackRed),
+            UInt8.max,
+        ]
+        pixel.withUnsafeBytes { bytes in
+            texture.replace(
+                region: MTLRegionMake2D(0, 0, 1, 1),
+                mipmapLevel: 0,
+                withBytes: bytes.baseAddress!,
+                bytesPerRow: 4
+            )
+        }
+        try setSource(texture: texture)
+    }
+
     /// Replaces only the data used to build future frame uniforms. Pipelines,
     /// mesh buffers, and the one-capture texture pyramid remain untouched.
     public func updateTuning(_ tuning: FoldTuning) {
         stateLock.lock()
         currentTuning = tuning
+        stateLock.unlock()
+    }
+
+    /// Reduces the per-fragment blur from three source samples to one. The
+    /// presentation cadence is deliberately unchanged.
+    public func setReducedQuality(_ reduced: Bool) {
+        stateLock.lock()
+        currentReducedQuality = reduced
         stateLock.unlock()
     }
 
@@ -183,6 +238,7 @@ public final class FoldRenderer {
             return false
         }
         let tuning = currentTuning
+        let reducedQuality = currentReducedQuality
         stateLock.unlock()
 
         inFlightSemaphore.wait()
@@ -200,7 +256,8 @@ public final class FoldRenderer {
             progress: progress,
             tuning: tuning,
             viewportSize: SIMD2<Int>(target.width, target.height),
-            sourceSize: SIMD2<Int>(pyramid.texture.width, pyramid.texture.height)
+            sourceSize: SIMD2<Int>(pyramid.texture.width, pyramid.texture.height),
+            reducedQuality: reducedQuality
         )
         withUnsafeBytes(of: &uniforms) { bytes in
             uniformBuffer.contents().copyMemory(from: bytes.baseAddress!, byteCount: bytes.count)

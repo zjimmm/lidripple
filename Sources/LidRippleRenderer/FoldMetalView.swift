@@ -13,7 +13,9 @@ import LidRippleCore
 public protocol FoldPresentation: AnyObject {
     var view: NSView { get }
     func setSource(_ frame: CapturedFrame) throws
+    func useFallbackSource() throws
     func clearSource()
+    func setReducedQuality(_ reduced: Bool)
     func update(_ state: FoldState)
 }
 
@@ -96,6 +98,11 @@ public final class FoldMetalView: MTKView, MTKViewDelegate, FoldPresentation {
         didInstallSource()
     }
 
+    public func useFallbackSource() throws {
+        try foldRenderer.useFallbackSource()
+        didInstallSource()
+    }
+
     /// Installs deterministic content for preview and renderer UI tests without
     /// constructing a ScreenCaptureKit frame or requesting TCC permission.
     public func setPreviewSource(_ texture: any MTLTexture) throws {
@@ -117,6 +124,11 @@ public final class FoldMetalView: MTKView, MTKViewDelegate, FoldPresentation {
             blue: tuning.warmBlackBlue,
             alpha: 1
         )
+        if hasSource { draw() }
+    }
+
+    public func setReducedQuality(_ reduced: Bool) {
+        foldRenderer.setReducedQuality(reduced)
         if hasSource { draw() }
     }
 
@@ -167,9 +179,15 @@ public final class FoldMetalView: MTKView, MTKViewDelegate, FoldPresentation {
         switch phase {
         case .idle, .armed:
             isPaused = true
-        case .folding, .unfolding, .sealed:
-            isPaused = !hasSource
+        case .folding, .unfolding:
+            // The app lifecycle timer is the sole presentation clock. Keep
+            // MTKView's internal timer paused and draw exactly once per state
+            // update so sensor callbacks cannot double-schedule GPU work.
+            isPaused = true
             if hasSource { draw() }
+        case .sealed:
+            if hasSource { draw() }
+            isPaused = true
         }
     }
 
