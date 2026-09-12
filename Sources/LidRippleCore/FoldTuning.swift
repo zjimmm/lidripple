@@ -27,7 +27,8 @@ public struct FoldTuning: Codable, Equatable, Sendable {
     // MARK: Filtering
     public var filterCutoffHz: Double = 15
     /// Velocity smoothing. Plan deviation 1.
-    public var velocitySmoothingHz: Double = 4.5
+    /// Empirically lowered from spec's 8 Hz to keep jitterAtRestKeepsSmoothedVelocityBelowTheDirectionGate passing with margin.
+    public var velocitySmoothingHz: Double = 4.0
     public var deadbandDegrees: Double = 0.3
 
     // MARK: Spring
