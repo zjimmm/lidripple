@@ -105,14 +105,16 @@ enum FoldShaderLibrary {
         const float softness = max(uniforms.voidAndRim.y, 0.0001f);
         const float lit = smoothstep(0.0f, 1.0f, (panelV - horizon) / softness);
         const float3 warmBlack = uniforms.colorAndTap.xyz;
-        color.rgb = mix(warmBlack, color.rgb, lit);
+        const float voidAmount = (1.0f - lit) * progress;
+        color.rgb = mix(color.rgb, warmBlack, voidAmount);
 
         const float widenedRim = max(
             uniforms.voidAndRim.z * mix(1.0f, uniforms.finish.x, progress),
             0.0001f
         );
         const float rimCoordinate = (panelV - horizon) / widenedRim;
-        const float rim = exp(-(rimCoordinate * rimCoordinate)) * uniforms.voidAndRim.w;
+        const float rim = exp(-(rimCoordinate * rimCoordinate))
+            * uniforms.voidAndRim.w * progress;
         color.rgb += rim * float3(0.38f, 0.68f, 1.0f);
 
         const float coolAmount = uniforms.finish.y * progress;
