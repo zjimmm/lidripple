@@ -47,9 +47,13 @@ Three things make this worth building:
 - G1. Fold the built-in display's contents into the hinge as the lid closes, tracking the
   real lid angle, at full display refresh and native resolution.
 - G2. Reverse live and smoothly if the lid is reopened mid-close.
-- G3. Play an opening animation in every realistic case, including when the Mac locked.
-- G4. Work on Macs without a lid angle sensor via a timed fallback using the identical
-  renderer.
+- G3. Play an opening animation after physical reopen or unlock when the active session,
+  built-in display, and Screen Recording permission allow a fresh frame. Never draw
+  above `loginwindow` or replay a stale pre-sleep frame.
+- G4. On Macs without a validated lid angle sensor, fail safely at sleep and provide a
+  fresh scripted unfold after unlock when session and Screen Recording conditions allow
+  it. A close animation may play only when an early public trigger and a visible panel
+  window have been demonstrated; it is not guaranteed in v1.
 - G5. Visibly exceed existing implementations on animation quality, judged by a
   frame-matched side-by-side against real iPhone Duo footage.
 - G6. Cost nothing when idle: no capture stream, no GPU work, negligible CPU.
@@ -166,25 +170,36 @@ next.
   opening; macOS does not permit drawing above `loginwindow`, and trying produces a
   visible failure. Lock state is detected via `kCGSSessionOnConsoleKey` and the
   `com.apple.screenIsLocked` / `com.apple.screenIsUnlocked` notifications.
-- FR-10. On successful unlock, the app captures a **fresh** frame and unfolds it from
-  progress 1 to 0 over 620 ms on a spring-shaped curve. Unfolding the pre-sleep capture
-  would be an obvious tell; the user must see the desktop as it is now.
+- FR-10. On successful unlock, when the active session, built-in display, and Screen
+  Recording permission allow capture, the app captures a **fresh** frame and unfolds it
+  from progress 1 to 0 over 620 ms on a spring-shaped curve. If those conditions are
+  absent, it stays sealed without drawing. Unfolding the pre-sleep capture would be an
+  obvious tell; the user must see the desktop as it is now.
 
-### 7.4 Sensor-less Macs (timed fallback)
+### 7.4 Sensor-less Macs (limited mode)
 
-- FR-11. At launch, probe for the HID sensor. If absent, bind `EventAngleSource` instead,
-  which synthesizes a progress ramp from lid and sleep/wake events and drives the
-  identical renderer over ~550 ms.
-- FR-12. The menu bar indicates which mode is active. Angle-tracking and reversibility are
-  understood losses in fallback mode; the visual effect is not degraded.
+- FR-11. At launch, probe for the HID sensor. If absent or lost after bounded recovery,
+  select sensor-less mode with the same `FoldDriver`, capture, overlay, renderer, and
+  tuning. Its synthetic source owns no active timer while waiting. A ~550 ms close may
+  run only if a supported public trigger is measured to arrive while the built-in panel
+  can still show the program. Otherwise `willSleep` immediately seals and tears down
+  capture without a visible close. Do not delay forced sleep, use an undocumented
+  production trigger, or draw over `loginwindow`. After unlock, use the normal fresh-frame
+  scripted unfold when the session, display, and Screen Recording permission allow it.
+- FR-12. The menu and README identify sensor-less mode as limited/experimental until
+  physically qualified. They state that close animation may be absent, angle tracking
+  and mid-close reversal are unavailable, and a no-sleep clamshell close may be
+  undetectable. A unit-tested 550 ms source alone must not be advertised as a visible
+  close on real hardware.
 
 ### 7.5 Displays
 
 - FR-13. The fold plays only on the built-in display. External displays are never
   captured and never overlaid.
-- FR-14. In clamshell mode with an external display attached, the Mac does not sleep, so
-  the built-in fold plays on close and the reopen stays fully angle-tracked. This is the
-  best-case demonstration path.
+- FR-14. In clamshell mode with an external display attached, a sensor-equipped Mac may
+  remain awake, so its built-in fold can play on close and reopen stays angle-tracked.
+  This is the best-case demonstration path. Without a validated sensor, a no-sleep
+  clamshell close may be undetectable and must not be advertised as angle-tracked.
 
 ### 7.6 Application surface
 
@@ -206,8 +221,8 @@ reversal, hysteresis — therefore become unit-testable and replayable from reco
 traces, instead of debugging by closing a laptop four hundred times.
 
 ```
- IOHIDDevice 0x05AC/0x8104        NSWorkspace / IOKit
- usage 0x0020:0x008A @60Hz        lid + sleep/wake events
+ IOHIDDevice 0x05AC/0x8104        supported optional event
+ usage 0x0020:0x008A @60Hz        + wake/unlock events
           |                                |
    HIDAngleSource                   EventAngleSource     <- both conform to
           \                                /                LidAngleSource
@@ -241,7 +256,7 @@ traces, instead of debugging by closing a laptop four hundred times.
 |---|---|---|
 | `LidAngleSource` | Protocol: a stream of `AngleSample`. The seam for fakes and trace replay. | — |
 | `HIDAngleSource` | Opens the HID device, polls at 60 Hz, emits samples, reports `isAvailable`. | IOKit |
-| `EventAngleSource` | Fallback: synthesizes an angle ramp from lid/wake events. | NSWorkspace |
+| `EventAngleSource` | Sensor-less source: timed angle ramp only after a qualified visible-close trigger; otherwise idle until fresh unlock handling. | App-provided events |
 | `FoldDriver` | **Pure.** Phase machine, spring integrator, hysteresis. The product's feel. | nothing |
 | `CaptureCoordinator` | Warms, freezes, and stops the stream on phase changes; maintains the content filter. | ScreenCaptureKit |
 | `FoldRenderer` | Texture plus `FoldState` to one rendered frame. Stateless per frame. | Metal |
@@ -428,8 +443,10 @@ part of the product, and one piece of it comes first.
    doubles as the README GIF rig.
 5. **Performance assertions.** Frame time under 4 ms at 3456×2234 on an M1 Pro, logged and
    asserted in debug builds.
-6. **Manual matrix** (the irreducible part): sensor Mac × sensor-less Mac, locked ×
-   unlocked, clamshell × not, external display present × absent.
+6. **Manual matrix** (the irreducible part for qualified hardware): sensor Mac, locked ×
+   unlocked, clamshell × not, external display present × absent. A sensor-less physical
+   qualification is post-v1; until it is run, that mode is experimental and its close
+   animation is not a release claim. Simulated no-HID tests cannot replace that run.
 
 ---
 
@@ -443,7 +460,7 @@ part of the product, and one piece of it comes first.
 | S4 | Free when idle | Idle CPU < 0.2%, zero GPU work, no capture stream with lid open and static |
 | S5 | Clean reversal | Reversal from any progress returns to `idle` with no visual pop; verified across replay traces |
 | S6 | Fidelity to the original | Frame-matched side-by-side against real iPhone Duo footage — blur onset, void climb rate, total duration at subjective parity — committed to the repo as a GIF |
-| S7 | Works on sensor-less Macs | Timed fallback verified on an M2 MacBook Air |
+| S7 (v1) | Sensor-less mode degrades safely | Automated no-HID selection/recovery, idle ownership, immediate sleep seal, fresh post-unlock capture/unfold, permission handling, and accurate limited-mode copy. Physical sensor-less behavior and a visible close are unverified post-v1 qualifications, not v1 pass criteria. |
 
 S6 is the one that decides whether the project met its goal. It is subjective by nature,
 so it is made concrete by committing the comparison artifact to the repository where
@@ -473,7 +490,7 @@ anyone can judge it.
 | Risk | Impact | Mitigation |
 |---|---|---|
 | `IOHIDDeviceOpen` gated behind Input Monitoring on some macOS versions | Changes the permission story and the trust pitch | Verify in week one, before anything is built on the assumption (§11) |
-| Sensor absent on more models than expected | Fallback becomes the primary path for many users | Fallback uses the identical renderer, so the visual product is unharmed; mode is surfaced in the menu bar |
+| Sensor absent on more models than expected | The unqualified path may become common and may have no visible close | Label it limited/experimental, preserve safe sleep and fresh unlock behavior, and do not claim physical sensor-less support or a close animation before hardware qualification |
 | Tuning the spring and shader to actually match the original takes longer than building it | Schedule risk on the only criterion that matters (S6) | Hot-reloadable `FoldTuning` plus trace replay plus scrub mode exist specifically to compress this loop |
 | Fold start hitch from capture latency despite warm-up | Kills S3, and the start is the most-watched moment | Warm band is 35° wide; if still insufficient, widen it or hold a rolling one-frame buffer |
 | ScreenCaptureKit privacy indicator appearing distracting during the warm band | Perceived as spyware-ish | Warm band is brief; document it explicitly; narrowing it toward 90° is the lever |
@@ -498,8 +515,10 @@ freshness from band width.
    edge-case list from §10.
 5. **M4 — Fidelity.** Tune against real Duo footage until S6 holds. Produce the comparison
    GIF.
-6. **M5 — Ship.** Fallback driver, menu bar, onboarding, notarization, README, cask,
-   `LICENSE` file (MIT, §14), and the GitHub Sponsors link.
+6. **M5 — Ship.** Safe experimental sensor-less mode (visible close best-effort, not a
+   v1 guarantee), menu bar, onboarding, notarization, README, cask, `LICENSE` file
+   (MIT, §14), and the GitHub Sponsors link. Physical sensor-less qualification is
+   tracked after v1; all other release gates remain in force.
 
 ---
 
@@ -511,7 +530,7 @@ freshness from band width.
 | Motion model | Angle-locked with spring momentum | Viscous slow closes, continuous reversal, jitter immunity — all three from one mechanism |
 | Fold axis | Non-rigid squash into the bottom hinge | Honors real lid physics while keeping Duo's signature of pixels being consumed, not rotated |
 | Opening half | Angle-tracked when unlocked, scripted unfold on unlock | The only approach that always produces an animation without touching SIP |
-| Sensor-less Macs | Timed fallback, identical renderer | Preserves the visual product for a large share of the audience at the cost of one extra driver |
+| Sensor-less Macs | Limited/experimental mode, identical renderer when a close is actually triggered | Safe sleep and conditional fresh post-unlock unfold in v1; visible close and physical support claims wait for a qualified public trigger and sensor-less hardware test |
 | Displays | Built-in only | The effect represents a specific physical panel closing |
 | Capture | Freeze-frame with speculative warm-up | Faithful to Duo's frozen UI, cheapest, and removes the first-frame hitch |
 

@@ -1,7 +1,7 @@
 # lidripple Plan M5: Ship
 
 **Goal:** Turn the completed M0-M4 implementation into a trustworthy macOS menu-bar
-agent: add the timed sensor-less fallback, persisted product controls, first-run Screen
+agent: add safe experimental sensor-less mode, persisted product controls, first-run Screen
 Recording onboarding, launch-at-login, a real `LSUIElement` application bundle, and a
 verified Developer ID/notarized release path with the public documentation and project
 metadata required by the PRD.
@@ -43,14 +43,14 @@ overlay, renderer, and M4 tuning as sensor mode.
 
 | Requirement | M5 implementation | Evidence |
 |---|---|---|
-| G4, FR-11 | Event-driven 60 Hz synthetic angle source, selected when HID is absent or recovery exhausts | deterministic ramp/source replacement tests plus M2 MacBook Air run |
-| FR-12 | Read-only menu row reports `Lid angle sensor`, `Timed fallback`, or `Input unavailable` | menu-model and source-transition tests |
+| G4, FR-11 | No-HID selection and safe sleep seal; `EventAngleSource` stays idle until a future qualified early visible-close trigger | deterministic source/recovery/sleep tests; real no-HID hardware remains unverified post-v1 |
+| FR-12 | Read-only menu row reports sensor, experimental sensor-less, or unavailable mode with explicit close limitations | menu-model and source-transition tests plus copy review |
 | FR-15 | Bundled app has `LSUIElement=true`; no Dock icon or normal app window | plist assertion plus installed-app smoke |
 | FR-16 | Enable, intensity, login item, input mode, permission, and debug scrubber are all present | menu action tests and manual UI pass |
 | FR-17 | Persisted 0.5-1.0 intensity updates only blur radius, rotation, and squash gain | existing core contract plus live-output tests |
 | PRD §11 | Plain-language pre-prompt; denial state and Settings link; no extra permissions; GPU-only ephemeral capture | permission state-machine tests, fresh-profile manual run, README |
 | S4 | Disabled/idle/fallback-waiting owns no capture, drawable clock, or active fallback timer | lifecycle and timer-idleness assertions plus Activity Monitor/GPU check |
-| S7 | Timed fallback works on an M2 MacBook Air | physical recorded acceptance row; cannot be replaced by a fake-only pass |
+| S7 (v1) | Safe experimental sensor-less degradation, not a guaranteed visible close | automated no-HID selection/recovery, idle/teardown, fresh-unlock, permission, and copy tests; physical no-HID qualification remains post-v1 and unclaimed |
 | PRD §14 | Universal notarized Developer ID DMG on GitHub Releases; Homebrew cask; MIT | artifact verification log, cask audit/install, LICENSE |
 
 ## Input and fallback contract
@@ -60,25 +60,30 @@ driver or a progress-only bypass. Its injected clock/scheduler makes output full
 deterministic in tests. It emits samples only during a requested transition and owns no
 timer while stopped or waiting for an event.
 
-- A close/sleep event emits a monotonic decreasing angle program at 60 Hz. Its phase
-  landmarks cross the driver's arm, fold-start, fold-end, and seal thresholds in order,
-  with enough warm-band time for the normal speculative capture path. The final sample
-  is below `sealAngle`; the source does not call private lifecycle methods.
-- The visible fallback close is calibrated to approximately 550 ms end to end. Put its
-  duration and landmark fractions in one Codable `EventAngleTuning` value, not scattered
-  timer literals, and measure the resulting coordinator phase history rather than merely
-  asserting the source timer duration.
+- Only a demonstrated early public trigger may start a visible close. If one is
+  qualified, `EventAngleSource` emits a monotonic decreasing angle program at 60 Hz.
+  Its phase landmarks cross the driver's arm, fold-start, fold-end, and seal thresholds
+  in order, with enough warm-band time for the normal speculative capture path. The
+  final sample is below `sealAngle`; the source does not call private lifecycle methods.
+  No such production trigger is established for v1; `willSleep` must not start the ramp.
+- The source's nominal close program is approximately 550 ms. Keep its duration and
+  landmark fractions in one Codable `EventAngleTuning` value, not scattered timer
+  literals, and test the resulting coordinator phase history. A passing synthetic
+  timeline does not establish that real hardware displays those frames.
 - Locked physical opening never attempts to draw above `loginwindow`. Wake/unlock uses
   M3's fresh-frame scripted unfold. The input controller suppresses fallback samples
   while the session is restricted, so it cannot race that path.
 - Duplicate sleep/wake notifications are idempotent. A reverse event cancels the prior
   program before a new one begins; stopping/replacing a source invalidates all queued
   samples with the same generation rule as HID.
-- The NSWorkspace `willSleep` timing window is hardware-dependent. S7 must record whether
-  the M2 Air actually presents the full close before suspension and the fresh unfold
-  after unlock. If public NSWorkspace timing is insufficient, stop and revise the trigger
-  design with evidence; do not claim S7 from a synthetic clock or silently delay system
-  sleep with an undocumented/private mechanism.
+- `willSleep` immediately hard-seals and tears down capture. It is not an early-close
+  trigger: an owner-run probe on a sensor-equipped M2 Air observed the built-in panel
+  black immediately and `willSleep` within the lid-closed polling interval. This does
+  not prove every Mac's timing, but it cannot substantiate a 550 ms visible fallback.
+  Do not delay forced sleep or add undocumented/private production hooks.
+- Physical no-HID qualification is post-v1. Until an actual sensor-less Mac shows a
+  supported early trigger and visible time, product copy must say a close animation
+  may be absent; no simulated result or sensor-equipped test counts as hardware proof.
 - In fallback mode, clamshell closure without sleep may be undetectable and physical
   reversal is unavailable. State both limitations in the mode help text and README as
   FR-12 requires.
@@ -88,7 +93,7 @@ timer while stopped or waiting for an event.
 | Path | Responsibility |
 |---|---|
 | `Sources/LidRippleSensor/EventAngleSource.swift` | Idle-free scheduled fallback implementing `LidAngleSource` |
-| `Sources/LidRippleSensor/EventAngleTuning.swift` | Codable 550 ms ramp duration and threshold-relative landmarks |
+| `Sources/LidRippleSensor/EventAngleTuning.swift` | Codable nominal 550 ms ramp duration and threshold-relative landmarks; not a visibility claim |
 | `Tests/LidRippleSensorTests/EventAngleSourceTests.swift` | Fake-clock timing, ordering, cancellation, and idleness |
 | `Sources/LidRippleAppSupport/InputSourceController.swift` | HID-first selection, recovery, fallback, generations, event routing |
 | `Sources/LidRippleAppSupport/AppCoordinator.swift` | Product composition and app lifecycle policy |
@@ -131,8 +136,9 @@ timer while stopped or waiting for an event.
       within floating-point tolerance, start/stop are idempotent, and no handler is
       retained after stop.
 - [ ] Replay the source through a real `FoldDriver` and fake M3 lifecycle. Assert ordered
-      `idle -> armed -> folding -> sealed`, approximately 550 ms visible timing, one
-      warm/freeze cycle, and no distinct renderer path.
+      `idle -> armed -> folding -> sealed`, approximately 550 ms nominal program timing,
+      one warm/freeze cycle, and no distinct renderer path. Do not infer visibility on
+      physical hardware from this test.
 - [ ] Cover duplicate notifications, cancellation on every landmark, stop-from-handler,
       clock jumps, delayed ticks, wake while restricted, and source deallocation. Assert
       zero scheduled work before an event and after terminal delivery (S4).
@@ -153,9 +159,9 @@ timer while stopped or waiting for an event.
       orthogonal to enabled, session, display, permission, and capture state.
 - [ ] Route workspace sleep/wake and lock/session notifications through the controller.
       The selected source gets relevant events; M3 still owns hard seal, locked drawing
-      suppression, fresh unlock capture, and teardown. Specify/test ordering so the
-      fallback close is not synchronously overwritten by `systemWillSleep()` before its
-      first state can be presented.
+      suppression, fresh unlock capture, and teardown. `systemWillSleep()` must seal
+      synchronously without starting a fallback close. A future qualified early trigger
+      needs its own ordering test before it can be connected.
 - [ ] Test launch selection, HID-start failure, recovery on every retry, exhaustion,
       fallback-to-HID promotion, repeated wake, disable/enable, termination, and stale
       callbacks from both source types. Assert one source, one timer, one lifecycle, one
@@ -290,8 +296,9 @@ timer while stopped or waiting for an event.
       trust signal.
 - [ ] Put `docs/fidelity/duo-comparison.gif` above the README fold with M4 attribution.
       The README must also include: concise demo/requirements; install and uninstall;
-      supported-model table with sensor/fallback and the current 1-degree/raw-scale
-      caveat; menu controls; fallback limitations; Screen Recording rationale and denial
+      supported-model table with sensor/experimental sensor-less mode and the current
+      1-degree/raw-scale caveat; menu controls; unavailable visible-close limitations;
+      Screen Recording rationale and denial
       recovery; explicit no Accessibility/Input Monitoring/network/telemetry/disk-capture
       statements; DRM black-frame behavior; brief fold/spring/shader math; build/test;
       troubleshooting; license; Sponsors; and links to fidelity/sensor evidence.
@@ -306,7 +313,7 @@ timer while stopped or waiting for an event.
       version/tag/cask invariants, notarization troubleshooting, rollback, and the owner-
       approval boundary for pushes/tags/releases.
 
-## Task 9: S7, privacy, and final release gates
+## Task 9: v1 S7, privacy, and final release gates
 
 - [ ] Run `swift test -Xswiftc -warnings-as-errors` and
       `swift build -c release -Xswiftc -warnings-as-errors` from a clean checkout, then
@@ -318,11 +325,14 @@ timer while stopped or waiting for an event.
 - [ ] On the sensor Mac, verify live close/reversal, runtime HID loss to fallback, wake
       promotion back to HID, all menu states, each intensity endpoint, debug scrubber,
       fullscreen/Spaces, DRM black content, and no stale capture after lock/unlock.
-- [ ] On an M2 MacBook Air with no reporting sensor, record S7: fallback selected at
-      launch, approximately 550 ms close behavior, fresh post-unlock reveal, no reversal
-      claim, idle cost, and repeated sleep/wake stability. Record OS/model, timestamps,
-      frame evidence, and any unavailable clamshell behavior. S7 remains unchecked until
-      this physical run exists.
+- [ ] For v1 S7, verify no-HID selection/recovery, no scheduled idle timer/capture/drawable work,
+      synchronous sleep seal and teardown, stale-callback suppression, fresh-frame
+      post-unlock unfold, permission gating, and accurate experimental-mode copy with
+      deterministic tests. A forced-no-HID run on a sensor-equipped Mac is simulation,
+      not physical qualification. Keep the actual sensor-less hardware row explicitly
+      unverified and post-v1; do not advertise its close animation as available. S4's
+      measured idle CPU and zero GPU gate remains separate and must not be inferred
+      from these deterministic tests.
 - [ ] From `/Applications`, verify LSUIElement behavior, launch-at-login across a real
       logout/reboot, Gatekeeper on a clean machine/account, DMG mount/copy/eject, and cask
       install/uninstall. Confirm Activity Monitor/network tooling shows no app-owned
@@ -336,8 +346,10 @@ timer while stopped or waiting for an event.
 
 ## Definition of done
 
-- [ ] FR-11/FR-12 and S7 are physically demonstrated on an M2 MacBook Air; fallback is
-      not represented as angle-tracked or reversible.
+- [ ] FR-11/FR-12 and v1 S7 safe-degradation tests pass. The sensor-less mode is labeled
+      experimental/unverified on real no-HID hardware, with no guaranteed visible close,
+      angle tracking, or mid-close reversal. Physical no-HID qualification remains
+      post-v1 and cannot be inferred from a sensor-equipped M2 Air.
 - [ ] FR-15/FR-16/FR-17 hold in the installed app, preferences persist, and every disable,
       debug, source-replacement, and termination path leaves no orphaned work.
 - [ ] Screen Recording is the only requested TCC permission, explanation always precedes
@@ -352,5 +364,6 @@ timer while stopped or waiting for an event.
       the corresponding GitHub release; no placeholder checksum or mutable rebuild exists.
 - [ ] Full tests/builds, M3/M4 regressions, CI, Homebrew checks, installed-app checks,
       permission/manual matrix, security review, and release verification are green or
-      explicitly recorded as not yet satisfied. Nothing is called shipped while an S7,
-      signing, notarization, or release-artifact gate remains unchecked.
+      explicitly recorded as not yet satisfied. Nothing is called shipped while a v1 S7,
+      signing, notarization, or release-artifact gate remains unchecked. The separate
+      post-v1 physical no-HID row must remain labeled unverified, not silently passed.

@@ -44,9 +44,24 @@ uploading the asset. A different byte sequence is a different release candidate.
 
 ## Release sequence
 
-1. Confirm M4's comparison GIF/provenance/human approval and every applicable M5 row in
-   `docs/verification/2026-09-12-m5-release-matrix.md`. S7, fresh-profile TCC, installed
-   login item, and privacy checks require physical evidence.
+1. Confirm M4/S6's comparison GIF/provenance/human approval and every applicable v1 M5
+   row in `docs/verification/2026-09-12-m5-release-matrix.md`. S7 for v1 is an
+   **automated safe-degradation gate**: no-HID selection and bounded recovery,
+   resource/timer cleanup, immediate sleep seal, fresh post-unlock frame subject to
+   session/display/Screen Recording conditions, permission handling, and accurate
+   mode copy. Leave its checkboxes unchecked until the reviewed candidate passes.
+   A visible sensor-less close and physical qualification on a genuinely no-HID Mac
+   are separately tracked post-v1, not v1 pass criteria. Fresh-profile TCC,
+   sensor-equipped behavior, installed login item, and privacy checks still require
+   physical evidence.
+   Before release, verify that the app, README, supported-model table, and release
+   notes call the no-HID path **experimental/unverified** and say that close animation
+   is currently unavailable. The approximately 550 ms program is unit-tested but has
+   no production early trigger; do not present it as a working close animation.
+   Angle tracking and physical mid-close reversal are unavailable in that mode, and a
+   no-sleep clamshell close may be undetectable. Only consider a future visible close
+   best-effort after a supported early trigger is measured while the built-in panel
+   can still display frames. Do not delay forced sleep or draw over `loginwindow`.
 2. Confirm the public copyright name and active GitHub Sponsors profile.
 3. From a clean, synchronized `main`, run the automated gates:
 

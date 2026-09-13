@@ -27,15 +27,20 @@ struct MenuBarControllerTests {
             enabled: false,
             intensity: 0.5,
             launchAtLogin: .requiresUserApproval,
-            inputMode: "Timed fallback",
+            inputMode: "Sensor-less (experimental)",
             screenRecording: .denied
         ))
 
         #expect(item(.enabled, in: controller).state == .off)
         #expect(item(.launchAtLogin, in: controller).state == .on)
         #expect(item(.launchAtLogin, in: controller).title.contains("Needs Approval"))
-        #expect(item(.inputMode, in: controller).title == "Input Mode: Timed fallback")
-        #expect(item(.inputMode, in: controller).toolTip?.contains("no angle tracking") == true)
+        #expect(item(.inputMode, in: controller).title == "Input Mode: Sensor-less (experimental)")
+        let help = item(.inputMode, in: controller).toolTip
+        #expect(help?.contains("Unverified on a Mac without a lid-angle sensor") == true)
+        #expect(help?.contains("A visible close animation is currently unavailable") == true)
+        #expect(help?.contains("Physical angle tracking and mid-close reversal are unavailable") == true)
+        #expect(help?.contains("no-sleep clamshell close may be undetectable") == true)
+        #expect(help?.contains("fresh opening after unlock requires an active session, built-in display, and Screen Recording permission") == true)
         #expect(!item(.inputMode, in: controller).isEnabled)
         #expect(item(.screenRecording, in: controller).title.contains("Needs Permission"))
         #expect(item(.screenRecording, in: controller).isEnabled)
@@ -59,8 +64,19 @@ struct MenuBarControllerTests {
         #expect(item(.launchAtLogin, in: controller).title.contains("Unavailable"))
         #expect(!item(.launchAtLogin, in: controller).isEnabled)
         #expect(item(.inputMode, in: controller).title == "Input Mode: Input unavailable")
+        #expect(item(.inputMode, in: controller).toolTip == nil)
         #expect(item(.screenRecording, in: controller).title == "Screen Recording: Granted")
         #expect(!item(.screenRecording, in: controller).isEnabled)
+
+        controller.update(MenuBarSnapshot(
+            enabled: true,
+            intensity: 0.75,
+            launchAtLogin: .enabled,
+            inputMode: "Lid angle sensor",
+            screenRecording: .granted
+        ))
+        #expect(item(.inputMode, in: controller).title == "Input Mode: Lid angle sensor")
+        #expect(item(.inputMode, in: controller).toolTip == nil)
     }
 
     @Test func actionsForwardValuesWithoutPerformingPlatformWork() {

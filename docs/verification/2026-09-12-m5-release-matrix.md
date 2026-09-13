@@ -12,6 +12,12 @@ done. Do not infer a pass from implementation or simulation alone. Never paste c
 pixels, Apple credentials, certificate identifiers, notarization submission IDs, or
 unredacted personal identifiers into this file.
 
+For v1, S7 means **safe automated sensor-less degradation**, not a visible close or a
+physical pass on a no-HID Mac. The no-HID hardware path must be labeled
+**experimental/unverified** in the app, README, release notes, and supported-model
+table. Physical qualification and any visible close claim are separately tracked
+post-v1. All other M5 gates in this matrix remain in force.
+
 ## Automated regression and static gates
 
 - [ ] Clean-checkout `swift test -Xswiftc -warnings-as-errors`
@@ -37,7 +43,7 @@ session change immediately before input starts, a late restriction during animat
 wake arriving during an in-flight unlock, and invalidation of queued menu/unlock
 proof by a new lock. Metal tests required a test process
 outside the restricted development sandbox; this did not grant the app new runtime
-permissions. These are not clean-checkout or physical S7 evidence.
+permissions. These are not clean-checkout or v1 S7 acceptance evidence.
 
 Session probe, 2026-09-13: this development Mac is a `Mac16,12` M4 MacBook Air on
 macOS 26.6.2. While its desktop was visibly unlocked, `CGSessionCopyCurrentDictionary`
@@ -135,7 +141,7 @@ Evidence and redacted notes: pending
 
 - [ ] Live close follows physical angle and seals cleanly
 - [ ] Reversal from early/mid/late fold returns without a visual pop
-- [ ] Runtime HID loss selects timed fallback after bounded recovery
+- [ ] Runtime HID loss selects experimental sensor-less mode after bounded recovery
 - [ ] Wake promotes fallback back to HID when the sensor becomes available
 - [ ] Enable, intensity endpoints, login, input, permission, and debug menu states pass
 - [ ] Debug scrubber requests no TCC and leaves no timer/window/capture after close
@@ -147,35 +153,53 @@ Model / chip / OS: pending
 
 Evidence and redacted notes: pending
 
-## S7 sensor-less M2 MacBook Air
+## S7 v1: safe automated sensor-less degradation
 
-- [ ] Timed fallback is selected at launch
-- [ ] Close program is approximately 550 ms and visibly begins before suspension
-- [ ] Post-unlock reveal uses a fresh frame
-- [ ] UI and documentation make no angle tracking or reversal claim
-- [ ] Open/static state is below 0.2% CPU with zero GPU/capture/fallback timer activity
-- [ ] Repeated sleep/wake remains stable
-- [ ] Undetectable no-sleep clamshell behavior, if observed, is recorded
+- [ ] No-HID launch selects sensor-less fallback; HID loss and bounded recovery select
+      it without an orphaned source, capture, overlay, or timer
+- [ ] Synthetic source and fallback timer stay idle without a safe public close trigger;
+      deterministic lifecycle tests show no scheduled drawable, capture stream, or
+      fallback timer in the open/static state
+- [ ] `willSleep` immediately seals and tears down capture/overlay/source without
+      starting a visible close or delaying forced sleep
+- [ ] Wake/unlock uses a fresh post-unlock frame only when session, display, and Screen
+      Recording permission allow it; no pre-sleep frame is reused
+- [ ] Permission denial/revocation, stale callbacks, and repeated sleep/wake safely
+      suppress or release resources
+- [ ] App mode copy, README, release notes, and supported-model table say the no-HID
+      hardware path is experimental/unverified; close animation is currently unavailable,
+      angle tracking and physical mid-close reversal are absent, and a no-sleep clamshell
+      close may be undetectable
 
-Current design blocker: `willSleep` synchronously hard-seals and tears down
-ScreenCaptureKit as required by the sleep-safety contract. Its public notification
-may arrive too late to display the 550 ms fallback program; the program is
-implemented and unit-tested but has no production `beginFallbackClose()` caller.
-Apple documents that a `willSleep` observer can delay sleep, and its power-management
-QA says forced lid-close sleep can be delayed but not cancelled. Neither source
-guarantees that the built-in panel remains visible after the lid switch fires
+These are automated release checks and remain unchecked until run against the reviewed
+candidate. S4's measured below-0.2% idle CPU and zero GPU activity remain a separate
+performance gate; source/timer assertions do not prove those measurements. A
+forced-no-HID run on a sensor-equipped Mac is a simulation, not physical
+no-HID qualification. The approximately 550 ms close program is unit-tested, but
+production has no `beginFallbackClose()` caller. `willSleep` hard-seals for safety and
+must not be used to imply a visible close. A future close animation is best-effort only
+after an early supported trigger is measured while the built-in panel can still show it.
+
+## Post-v1: physical sensor-less hardware qualification (not a v1 gate)
+
+- [ ] On a genuinely no-HID Mac, record model/OS and confirm no validated lid-angle
+      endpoint is available
+- [ ] Measure close-event to last-visible-frame timing and actual close visibility, if any
+- [ ] Confirm fresh post-unlock reveal, open/static idle cost, and repeated sleep/wake
+- [ ] Record any no-sleep clamshell close that the mode cannot detect
+- [ ] Upgrade the supported-model or visible-close claim only after physical evidence
+      and, for a visible close, a safe supported early trigger
+
+These rows track future physical qualification, not an exception to the other v1
+release gates. For a timing run, execute `swift scripts/power-event-probe.swift` in a
+Terminal on a genuinely sensor-less Mac, then close/reopen the lid and stop the probe
+with Ctrl-C. Record model/OS, `registry.lidClosed`, `workspace.willSleep`, and
+`screens.didSleep` uptimes, plus a human observation of the last visible frame. The
+probe reads an undocumented registry property only for diagnosis; it does not capture
+pixels, request sleep, delay sleep, or enable that property in production. Apple's
+documentation does not promise display visibility after the lid switch fires
 ([AppKit](https://developer.apple.com/documentation/appkit/nsworkspace/willsleepnotification),
 [IOKit QA1340](https://developer.apple.com/library/archive/qa/qa1340/_index.html)).
-S7 must measure the actual M2 Air's event-to-blank interval and demonstrate a safe,
-public trigger or a documented delay that keeps pixels visible. Do not ship this as
-accepted S7 based on the source unit tests or a sleep-delay assumption.
-
-For the physical timing run, execute `swift scripts/power-event-probe.swift` in a
-Terminal on the M2 Air, then close/reopen the lid and stop the probe with Ctrl-C.
-Record the model/OS, `registry.lidClosed`, `workspace.willSleep`, and
-`screens.didSleep` uptimes, plus a human observation of the last visible frame.
-The probe reads an undocumented registry property only for diagnosis; it does not
-capture pixels, request sleep, delay sleep, or enable that property in production.
 
 Owner-run preliminary physical probe, 2026-09-13, on a reported M2 MacBook Air
 that subsequently proved to have a responding lid-angle HID endpoint:
@@ -195,7 +219,8 @@ visible program beginning at `willSleep` on this sensor-equipped unit.
 The same owner-run `lidripple-trace probe` reported vendor 0x05AC/product
 0x8104, then `HIDAngleSource` successfully opened a Feature-report endpoint
 and streamed repeated 100-degree samples. Physical angle variation has not
-yet been recorded, but this is not a sensor-less M2 Air and cannot satisfy S7.
+yet been recorded, but this is not a sensor-less M2 Air and cannot qualify the
+post-v1 no-HID hardware path.
 
 Model / chip: M2 MacBook Air (owner report; identifier pending; HID endpoint
 present)
@@ -203,8 +228,8 @@ present)
 OS / timestamps / frame evidence: OS and frame evidence pending; preliminary
 event uptimes recorded above
 
-S7 result: **unchecked — tested M2 Air has a lid-angle endpoint, not the
-sensor-less configuration required by S7; no visible fallback was demonstrated**
+Post-v1 physical qualification: **unchecked — tested M2 Air has a lid-angle
+endpoint, not the sensor-less configuration; no visible fallback was demonstrated**
 
 ## Installed app and login item
 

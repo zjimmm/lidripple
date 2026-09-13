@@ -33,7 +33,7 @@ struct AppCoordinatorTests {
 
         #expect(harness.input.startCount == 1)
         #expect(harness.lifecycle.inputAvailabilityValues.last == .timedFallback)
-        #expect(harness.coordinator.menuController.snapshot.inputMode == "Timed fallback")
+        #expect(harness.coordinator.menuController.snapshot.inputMode == "Sensor-less (experimental)")
 
         harness.input.emit(AngleSample(degrees: 70, timestamp: 1))
         #expect(harness.lifecycle.samples.count == 1)

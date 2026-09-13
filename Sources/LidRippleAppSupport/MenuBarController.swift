@@ -152,8 +152,8 @@ public final class MenuBarController: NSObject {
         }
 
         inputModeItem.title = "Input Mode: \(snapshot.inputMode)"
-        inputModeItem.toolTip = snapshot.inputMode == "Timed fallback"
-            ? "Sleep-event timing only: no angle tracking or reversal. A no-sleep clamshell close may not be detected."
+        inputModeItem.toolTip = snapshot.inputMode == "Sensor-less (experimental)"
+            ? "Unverified on a Mac without a lid-angle sensor. A visible close animation is currently unavailable: no early close trigger has been validated, and sleep seals immediately. Physical angle tracking and mid-close reversal are unavailable; a no-sleep clamshell close may be undetectable. A fresh opening after unlock requires an active session, built-in display, and Screen Recording permission."
             : nil
         switch snapshot.screenRecording {
         case .granted:

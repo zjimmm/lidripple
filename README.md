@@ -1,14 +1,18 @@
 # lidripple
 
 > **Pre-release status:** implementation is in progress. The frame-matched M4 Duo
-> comparison GIF, notarized v1.0.0 artifact, Homebrew cask, and physical M2 MacBook Air
-> fallback acceptance (S7) are not yet available. This repository does not claim those
-> release gates have passed.
+> comparison GIF, notarized v1.0.0 artifact, Homebrew cask, and v1 sensor-less
+> safety acceptance (S7) are not yet available. This repository does not claim those
+> release gates have passed. Physical qualification on a genuinely sensor-less Mac
+> is separately tracked after v1.
 
 lidripple is a native macOS menu-bar agent that turns closing a MacBook lid into a
 screen-fold animation. A physical lid-angle sensor drives the effect when the hardware
-exposes one; other Macs use a timed approximation driven by sleep and wake events. Both
-modes use the same Swift state machine, ScreenCaptureKit freeze frame, and Metal renderer.
+exposes one. Without a validated sensor, the app is designed to seal safely on sleep
+and can provide a fresh scripted unfold after unlock when the session and Screen
+Recording permission allow it. Both modes use the same Swift state machine,
+ScreenCaptureKit freeze frame, and Metal renderer; a sensor-less close animation is not
+currently available.
 
 The checked-in [M4 evidence](docs/fidelity/README.md) records reference provenance,
 timing analysis, local artifact hashes, and the remaining acceptance gaps. The required
@@ -26,14 +30,17 @@ human fidelity review. It is intentionally not represented by a placeholder.
 | Mac | Input mode | Current status and caveat |
 |---|---|---|
 | MacBook exposing Apple HID vendor `0x05AC`, product `0x8104` | Lid angle sensor | Auto-detected. The observed report changes in whole-degree steps and the current `rawToDegrees = 1.0` scale still needs a physical sweep before precision claims. |
-| MacBook without that HID endpoint | Timed fallback | Same renderer, approximately 550 ms close program. Physical M2 MacBook Air acceptance is pending. |
+| MacBook without that HID endpoint | Sensor-less fallback (experimental/unverified on real no-HID hardware) | Safe sleep seal and fresh post-unlock scripted unfold when conditions allow. No visible close animation is currently available; physical no-HID qualification is post-v1 work. |
 | Desktop Mac or external-display-only setup | Input unavailable | The effect represents the built-in panel, so no overlay is presented. |
 
-Timed fallback is not angle tracking. A clamshell close that does not produce a sleep
-event may be undetectable, and physical mid-close reversal is unavailable in this mode.
-The current `willSleep` handler immediately seals and releases capture for safety; it
-does not start the 550 ms program there. An earlier public trigger must be demonstrated
-on a real M2 MacBook Air before a visible fallback close can be claimed. S7 remains open.
+Sensor-less fallback is not angle tracking. A clamshell close that does not produce a
+sleep event may be undetectable, and physical mid-close reversal is unavailable in this
+mode. The current `willSleep` handler immediately seals and releases capture for safety;
+it does not start the unit-tested, approximately 550 ms close program. A visible close
+would be best-effort only after an early supported trigger is proven while the built-in
+panel can still display frames. No such production trigger has been demonstrated.
+The v1 S7 gate covers safe automated degradation, not a visible close or physical
+qualification on a no-HID Mac; that hardware path remains experimental and unverified.
 
 ## Controls
 
@@ -136,8 +143,10 @@ real Apple credentials and cannot be replaced by CI or an ad-hoc signature.
   session is safe to capture. Automatic startup in this case is still a release gate.
 - **Permission remains denied after changing Settings:** reactivate or relaunch
   lidripple so it refreshes TCC state.
-- **Timed fallback selected:** this is expected when the HID endpoint is absent or
-  recovery is exhausted; the mode row should say so explicitly.
+- **Sensor-less fallback selected:** this is expected when the HID endpoint is absent or
+  recovery is exhausted. Close animation is currently unavailable in this mode; a
+  fresh unfold after unlock still depends on an eligible session and Screen Recording
+  permission.
 - **Black protected content:** this is expected DRM behavior, not a capture bypass bug.
 - **No Dock icon:** intentional. `LSUIElement` makes lidripple a menu-bar agent.
 - **Sensor motion looks coarse:** current hardware evidence is one-degree quantized and

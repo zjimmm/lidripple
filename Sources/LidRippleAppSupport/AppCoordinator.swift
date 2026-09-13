@@ -398,7 +398,7 @@ public final class AppCoordinator: DebugScrubberSession {
 
     /// The system can suspend immediately after this notification. Hard-seal
     /// and invalidate capture synchronously; a visible sensor-less close needs
-    /// an earlier public event and remains an S7 physical-device acceptance gate.
+    /// an earlier public event and remains unverified post-v1 work.
     public func systemWillSleep() {
         guard isStarted, !isTerminating else { return }
         abortDebugForRestriction()
@@ -828,7 +828,7 @@ public extension InputSourceMode {
     var menuTitle: String {
         switch self {
         case .sensor: "Lid angle sensor"
-        case .timedFallback: "Timed fallback"
+        case .timedFallback: "Sensor-less (experimental)"
         case .unavailable: "Input unavailable"
         }
     }
