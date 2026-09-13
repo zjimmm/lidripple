@@ -76,7 +76,11 @@ by name. lidripple uses `SMAppService.mainApp`, so that stanza alone does not
 establish that a modern registration is removed. An installed, signed-app test
 must check actual Service Management status after uninstall; any app-specific
 unregistration fix must also preserve Launch at Login across cask upgrade and
-reinstall. The uninstall and zap rows remain unchecked.
+reinstall. Homebrew's built-in `login_item` directive skips removal when an
+upgrade successor exists, but its custom `uninstall script:` directive receives
+and ignores that successor; a naive app-specific unregister script would also
+run on upgrade/reinstall and could erase the user's enabled state. The uninstall
+and zap rows remain unchecked.
 
 Release-verifier smoke, 2026-09-13: shell syntax passed for all packaging scripts.
 A fresh ad-hoc universal app and DMG built without replacing existing output;
@@ -88,6 +92,17 @@ Developer ID, notarization, Gatekeeper, or final-cask verification.
 CI now repeats per-script syntax, ad-hoc DMG mount/content checks, cask generation,
 and a mislabeled-sidecar rejection. The CI row stays unchecked until that workflow
 actually passes on the reviewed commit.
+
+Latest local candidate regression, 2026-09-13, commit `4a0e3dc` on Apple M4:
+`swift test -Xswiftc -warnings-as-errors` passed 269/269 and
+`swift build -c release -Xswiftc -warnings-as-errors` passed. The test process
+ran outside the restricted development shell sandbox because Metal tests hung
+inside it; this did not change the app's runtime permissions. With the two
+opt-in benchmark flags enabled, all six selected tests passed: first-ten-frame
+GPU maximum 3.674 ms and submit-to-complete maximum 14.200 ms against a
+16.667 ms refresh interval; steady-state median 0.529 ms and p95 0.747 ms.
+These are local candidate measurements, not physical end-to-end S2/S3 proof or
+CI on the reviewed release commit.
 
 ## M4 / S6 fidelity prerequisite
 
