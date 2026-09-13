@@ -177,11 +177,27 @@ Record the model/OS, `registry.lidClosed`, `workspace.willSleep`, and
 The probe reads an undocumented registry property only for diagnosis; it does not
 capture pixels, request sleep, delay sleep, or enable that property in production.
 
-Model / chip: M2 MacBook Air (physical unit pending)
+Owner-run preliminary physical probe, 2026-09-13, on a reported M2 MacBook Air:
+the first `registry.lidClosed` was at uptime 89333.005350 and
+`workspace.willSleep` followed at 89333.006947 (+1.597 ms). On a second close,
+`workspace.willSleep` was at 89353.051057 and the 60 Hz-polled
+`registry.lidClosed` at 89353.052576; their order within the polling interval
+does not establish an earlier usable trigger. `screen.locked` followed at
+89333.437186 and 89353.250855 respectively, but those notifications do not
+prove the built-in panel was still displaying pixels. No `screens.didSleep`
+notification appeared in the supplied output. The owner observed the built-in
+screen go black immediately on closure. This was a probe-only run, not an app
+fallback demonstration; the exact last-visible-frame time, sensor absence,
+model identifier, and OS version remain unverified. The observations do not
+support a 550 ms visible program beginning at `willSleep`.
 
-OS / timestamps / frame evidence: pending
+Model / chip: M2 MacBook Air (owner report; identifier pending)
 
-S7 result: **unchecked — synthetic timing is not acceptable evidence**
+OS / timestamps / frame evidence: OS and frame evidence pending; preliminary
+event uptimes recorded above
+
+S7 result: **unchecked — physical probe did not demonstrate a visible fallback;
+the product behavior and sensor-less status still require verification**
 
 ## Installed app and login item
 
