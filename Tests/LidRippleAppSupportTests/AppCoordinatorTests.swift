@@ -96,6 +96,33 @@ struct AppCoordinatorTests {
         #expect(harness.input.sessionRestricted)
     }
 
+    @Test func sessionChangeImmediatelyBeforeInputStartFailsClosed() {
+        let harness = makeHarness(permissionGranted: true)
+        // Startup's initial check, onboarding check, and post-onboarding
+        // check all see active. The final input-enablement check does not.
+        harness.sessionAccess.restrictOnRead = 4
+        harness.coordinator.start(sessionAccess: .active)
+        #expect(harness.input.startCount == 0)
+        #expect(harness.input.sessionRestricted)
+        #expect(harness.lifecycle.lockCount >= 1)
+    }
+
+    @Test func lateSessionRestrictionRejectsSamplesAndStopsAnimationClock() {
+        let harness = makeHarness(permissionGranted: true)
+        harness.lifecycle.ingestResult = FoldState(phase: .folding, progress: 0.2, velocity: 1)
+        harness.coordinator.start(sessionAccess: .active)
+        harness.input.emit(AngleSample(degrees: 70, timestamp: 1))
+        #expect(harness.animation.activeCount == 1)
+
+        harness.sessionAccess.value = .restricted
+        harness.animation.fire()
+        harness.input.emit(AngleSample(degrees: 60, timestamp: 2))
+        #expect(harness.lifecycle.tickCount == 0)
+        #expect(harness.lifecycle.samples.count == 1)
+        #expect(harness.animation.activeCount == 0)
+        #expect(harness.input.sessionRestricted)
+    }
+
     @Test func missingLockKeyAtLaunchWaitsForInteractiveStatusMenu() async {
         let harness = makeHarness(permissionGranted: true)
         harness.sessionAccess.value = .unknown
@@ -120,6 +147,33 @@ struct AppCoordinatorTests {
         await Task.yield()
         #expect(harness.input.startCount == 0)
         #expect(harness.input.sessionRestricted)
+    }
+
+    @Test func menuPresenceProofExpiresOnInterveningLock() async {
+        let harness = makeHarness(permissionGranted: true)
+        harness.sessionAccess.value = .unknown
+        harness.coordinator.start(sessionAccess: .unknown)
+        harness.coordinator.menuDidOpen()
+        harness.coordinator.screenDidLock()
+        await Task.yield()
+        #expect(harness.lifecycle.unlockCount == 0)
+        #expect(harness.input.startCount == 0)
+        #expect(harness.input.sessionRestricted)
+    }
+
+    @Test func queuedUnlockNotificationExpiresOnInterveningLock() async {
+        let harness = makeHarness(permissionGranted: true)
+        harness.sessionAccess.value = .unknown
+        harness.coordinator.start(sessionAccess: .unknown)
+        let notificationGeneration = harness.coordinator.sessionEventGeneration
+        harness.coordinator.screenDidLock()
+        await harness.coordinator.screenDidUnlock(
+            sessionAccess: .unknown,
+            onConsole: true,
+            notificationGeneration: notificationGeneration
+        )
+        #expect(harness.lifecycle.unlockCount == 0)
+        #expect(harness.input.startCount == 0)
     }
 
     @Test func activationRefreshStartsRuntimeAfterSettingsGrant() {
@@ -243,6 +297,100 @@ struct AppCoordinatorTests {
         #expect(harness.input.startCount == 1)
     }
 
+    @Test func wakeArrivingDuringUnlockRetriesHIDAfterRuntimeRestores() async {
+        let harness = makeHarness(permissionGranted: true, inputMode: .timedFallback)
+        harness.lifecycle.holdUnlock = true
+        harness.coordinator.start(sessionAccess: .restricted)
+        let unlock = Task {
+            await harness.coordinator.screenDidUnlock(sessionAccess: .active, onConsole: true)
+        }
+        for _ in 0..<100 where !harness.lifecycle.isWaitingForUnlock {
+            await Task.yield()
+        }
+        #expect(harness.lifecycle.isWaitingForUnlock)
+        await harness.coordinator.systemDidWake(sessionAccess: .active)
+        #expect(harness.input.retryCount == 0)
+        harness.lifecycle.releaseUnlock()
+        await unlock.value
+        #expect(harness.lifecycle.unlockCount == 1)
+        #expect(harness.input.startCount == 1)
+        #expect(harness.input.retryCount == 1)
+    }
+
+    @Test func wakeAfterInterveningSleepRetriesStaleUnlockCapture() async {
+        let harness = makeHarness(permissionGranted: true)
+        harness.lifecycle.holdUnlock = true
+        harness.coordinator.start(sessionAccess: .restricted)
+        let oldUnlock = Task {
+            await harness.coordinator.screenDidUnlock(sessionAccess: .active, onConsole: true)
+        }
+        for _ in 0..<100 where !harness.lifecycle.isWaitingForUnlock {
+            await Task.yield()
+        }
+        #expect(harness.lifecycle.isWaitingForUnlock)
+        harness.coordinator.systemWillSleep()
+        await harness.coordinator.systemDidWake(sessionAccess: .active)
+        harness.lifecycle.holdUnlock = false
+        harness.lifecycle.releaseUnlock()
+        await oldUnlock.value
+        for _ in 0..<100 where harness.lifecycle.unlockCount < 2 {
+            await Task.yield()
+        }
+        #expect(harness.lifecycle.unlockCount == 2)
+        #expect(harness.input.startCount == 1)
+        #expect(!harness.input.sessionRestricted)
+    }
+
+    @Test func realUnlockAfterSleepRetriesOlderCaptureWithoutNewRestriction() async {
+        let harness = makeHarness(permissionGranted: true)
+        harness.lifecycle.holdUnlock = true
+        harness.coordinator.start(sessionAccess: .restricted)
+        let oldUnlock = Task {
+            await harness.coordinator.screenDidUnlock(sessionAccess: .active, onConsole: true)
+        }
+        for _ in 0..<100 where !harness.lifecycle.isWaitingForUnlock {
+            await Task.yield()
+        }
+        #expect(harness.lifecycle.isWaitingForUnlock)
+        harness.coordinator.systemWillSleep()
+        harness.sessionAccess.value = .unknown
+        await harness.coordinator.screenDidUnlock(sessionAccess: .unknown, onConsole: true)
+        harness.lifecycle.holdUnlock = false
+        harness.lifecycle.releaseUnlock()
+        await oldUnlock.value
+        for _ in 0..<100 where harness.lifecycle.unlockCount < 2 {
+            await Task.yield()
+        }
+        #expect(harness.lifecycle.unlockCount == 2)
+        #expect(harness.input.startCount == 1)
+    }
+
+    @Test func rejectedOffConsoleUnlockInvalidatesEarlierPendingProof() async {
+        let harness = makeHarness(permissionGranted: true)
+        harness.lifecycle.holdUnlock = true
+        harness.coordinator.start(sessionAccess: .restricted)
+        let oldUnlock = Task {
+            await harness.coordinator.screenDidUnlock(sessionAccess: .active, onConsole: true)
+        }
+        for _ in 0..<100 where !harness.lifecycle.isWaitingForUnlock {
+            await Task.yield()
+        }
+        #expect(harness.lifecycle.isWaitingForUnlock)
+        harness.coordinator.systemWillSleep()
+        harness.sessionAccess.value = .unknown
+        await harness.coordinator.screenDidUnlock(sessionAccess: .unknown, onConsole: true)
+        harness.sessionAccess.onConsole = false
+        await harness.coordinator.screenDidUnlock(sessionAccess: .unknown, onConsole: false)
+        harness.sessionAccess.onConsole = true
+        harness.lifecycle.holdUnlock = false
+        harness.lifecycle.releaseUnlock()
+        await oldUnlock.value
+        for _ in 0..<100 { await Task.yield() }
+        #expect(harness.lifecycle.unlockCount == 1)
+        #expect(harness.input.startCount == 0)
+        #expect(harness.input.sessionRestricted)
+    }
+
     @Test func disabledPreferenceDoesNotEraseActiveDebugSource() async throws {
         let harness = makeHarness(permissionGranted: true)
         harness.coordinator.start(sessionAccess: .active)
@@ -341,7 +489,7 @@ struct AppCoordinatorTests {
             presentsMenu: false,
             presentsDebugPanel: false,
             now: { 42 },
-            sessionAccessNow: { sessionAccess.value },
+            sessionAccessNow: { sessionAccess.current() },
             isCurrentConsoleNow: { sessionAccess.onConsole }
         )
         return CoordinatorHarness(
@@ -377,6 +525,14 @@ private struct CoordinatorHarness {
 private final class CoordinatorSessionAccess {
     var value: ConsoleSessionAccess = .active
     var onConsole = true
+    var restrictOnRead: Int?
+    private var readCount = 0
+
+    func current() -> ConsoleSessionAccess {
+        readCount += 1
+        if readCount == restrictOnRead { value = .restricted }
+        return value
+    }
 }
 
 @MainActor

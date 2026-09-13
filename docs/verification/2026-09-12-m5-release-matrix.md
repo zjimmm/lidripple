@@ -30,10 +30,14 @@ verification, created an unsigned local DMG, matched its generated SHA-256, and 
 `hdiutil verify`. These checks validate the tooling but do **not** satisfy the clean-
 checkout, Developer ID, notarization, Gatekeeper, cask, or final-release rows above.
 
-Development-only regression, 2026-09-13: 261/261 Swift tests and the release build
+Development-only regression, 2026-09-13: 269/269 Swift tests and the release build
 passed with warnings as errors after the lock/sleep, wake/unlock, source-handoff,
-debug-overlay, and missing-lock-key recovery fixes. These are not clean-checkout
-or physical S7 evidence.
+debug-overlay, and missing-lock-key recovery fixes. The latest tests also cover a
+session change immediately before input starts, a late restriction during animation,
+wake arriving during an in-flight unlock, and invalidation of queued menu/unlock
+proof by a new lock. Metal tests required a test process
+outside the restricted development sandbox; this did not grant the app new runtime
+permissions. These are not clean-checkout or physical S7 evidence.
 
 Session probe, 2026-09-13: this development Mac is a `Mac16,12` M4 MacBook Air on
 macOS 26.6.2. While its desktop was visibly unlocked, `CGSessionCopyCurrentDictionary`

@@ -188,12 +188,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func screenDidLock() { coordinator?.screenDidLock() }
 
     @objc private func screenDidUnlock() {
-        Task { @MainActor [weak self] in
-            guard let self else { return }
+        guard let eventCoordinator = coordinator else { return }
+        let generation = eventCoordinator.sessionEventGeneration
+        Task { @MainActor [weak self, weak eventCoordinator] in
+            guard let self, let eventCoordinator,
+                  generation == eventCoordinator.sessionEventGeneration else { return }
+            // Allow the lock-state dictionary to catch up with the public
+            // notification, while the generation binds it to this event.
             let session = self.currentSessionSnapshot()
-            await self.coordinator?.screenDidUnlock(
+            await eventCoordinator.screenDidUnlock(
                 sessionAccess: session.access,
-                onConsole: session.onConsole
+                onConsole: session.onConsole,
+                notificationGeneration: generation
             )
         }
     }

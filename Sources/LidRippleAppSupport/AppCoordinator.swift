@@ -123,6 +123,9 @@ public final class AppCoordinator: DebugScrubberSession {
     public private(set) var inputMode: InputSourceMode = .unavailable
     public private(set) var isStarted = false
     public private(set) var isDebugging = false
+    /// Invalidates queued OS-event delivery whenever a newer session
+    /// restriction is observed.
+    public var sessionEventGeneration: UInt64 { sessionRestrictionGeneration }
 
     private let preferences: AppPreferences
     private let lifecycle: any AppLifecycleControlling
@@ -150,6 +153,9 @@ public final class AppCoordinator: DebugScrubberSession {
     private var debugSessionGeneration: UInt64 = 0
     private var isUnlocking = false
     private var pendingExplicitUnlock = false
+    private var pendingWakeRestore = false
+    private var hasExplicitConsoleAuthorization = false
+    private var sessionRestrictionGeneration: UInt64 = 0
 
     public init(
         preferences: AppPreferences,
@@ -379,8 +385,10 @@ public final class AppCoordinator: DebugScrubberSession {
         guard isStarted, !isTerminating, sessionRestricted,
               sessionAccessNow() == .unknown,
               isCurrentConsoleNow() else { return }
+        let generation = sessionRestrictionGeneration
         Task { @MainActor [weak self] in
-            await self?.unlockAndRestoreRuntime(explicitUnlock: true)
+            guard let self, generation == self.sessionRestrictionGeneration else { return }
+            await self.unlockAndRestoreRuntime(explicitUnlock: true)
         }
     }
 
@@ -406,14 +414,21 @@ public final class AppCoordinator: DebugScrubberSession {
             refreshMenu()
             return
         }
+        if isUnlocking {
+            pendingWakeRestore = true
+            return
+        }
         await unlockAndRestoreRuntime()
-        retryHIDAfterWakeIfNeeded()
     }
 
     public func screenDidLock() {
         abortDebugForRestriction()
         stopAnimation()
         sessionRestricted = true
+        sessionRestrictionGeneration &+= 1
+        hasExplicitConsoleAuthorization = false
+        pendingExplicitUnlock = false
+        pendingWakeRestore = false
         inputSource.setSessionRestricted(true)
         inputSource.stop()
         _ = lifecycle.sessionLocked()
@@ -423,8 +438,11 @@ public final class AppCoordinator: DebugScrubberSession {
 
     public func screenDidUnlock(
         sessionAccess: ConsoleSessionAccess,
-        onConsole: Bool
+        onConsole: Bool,
+        notificationGeneration: UInt64? = nil
     ) async {
+        guard notificationGeneration == nil
+                || notificationGeneration == sessionRestrictionGeneration else { return }
         // This explicit unlock signal can authorize the public on-console
         // evidence when macOS omits its private lock-state dictionary key.
         guard onConsole, sessionAccess != .restricted,
@@ -438,13 +456,16 @@ public final class AppCoordinator: DebugScrubberSession {
             return
         }
         await unlockAndRestoreRuntime(explicitUnlock: true)
-        retryHIDAfterWakeIfNeeded()
     }
 
     public func sessionResignedActive() {
         abortDebugForRestriction()
         stopAnimation()
         sessionRestricted = true
+        sessionRestrictionGeneration &+= 1
+        hasExplicitConsoleAuthorization = false
+        pendingExplicitUnlock = false
+        pendingWakeRestore = false
         inputSource.setSessionRestricted(true)
         inputSource.stop()
         _ = lifecycle.sessionResignedActive()
@@ -563,12 +584,20 @@ public final class AppCoordinator: DebugScrubberSession {
             sourceModeChanged(.unavailable)
             return
         }
+        // Session state can change while onboarding or other synchronous
+        // policy work runs. Revalidate immediately before enabling input.
+        guard isRuntimeSessionAuthorizedNow() else {
+            restrictSession(lockLifecycle: true)
+            refreshMenu()
+            return
+        }
         inputSource.setSessionRestricted(false)
         sourceModeChanged(inputSource.start())
     }
 
     private func receive(_ sample: AngleSample) {
         guard runtimePermitted else { return }
+        guard enforceRuntimeSession() else { return }
         let state = lifecycle.ingest(sample)
         updateAnimation(for: state)
     }
@@ -601,6 +630,7 @@ public final class AppCoordinator: DebugScrubberSession {
             guard animation == nil else { return }
             animation = animationScheduler.schedule(interval: 1.0 / 60.0) { [weak self] in
                 guard let self else { return }
+                guard self.enforceRuntimeSession() else { return }
                 self.updateAnimation(for: self.lifecycle.tick(now: self.now()))
             }
         case .idle, .armed, .sealed:
@@ -616,6 +646,10 @@ public final class AppCoordinator: DebugScrubberSession {
     private func finalizeSleep() {
         stopAnimation()
         sessionRestricted = true
+        sessionRestrictionGeneration &+= 1
+        hasExplicitConsoleAuthorization = false
+        pendingExplicitUnlock = false
+        pendingWakeRestore = false
         inputSource.stop()
         inputSource.setSessionRestricted(true)
         _ = lifecycle.systemWillSleep()
@@ -623,9 +657,23 @@ public final class AppCoordinator: DebugScrubberSession {
         refreshMenu()
     }
 
-    private func restrictSession(lockLifecycle: Bool) {
+    private func restrictSession(
+        lockLifecycle: Bool,
+        preservePendingEvidence: Bool = false
+    ) {
         stopAnimation()
+        // Only an old capture completing after a *previous* restriction may
+        // retain a newer wake/unlock event. Every externally observed negative
+        // event invalidates queued positive evidence, even if already restricted.
+        let preserve = preservePendingEvidence && sessionRestricted
+            && sessionAccessNow() != .restricted
         sessionRestricted = true
+        if !preserve {
+            sessionRestrictionGeneration &+= 1
+            pendingExplicitUnlock = false
+            pendingWakeRestore = false
+        }
+        hasExplicitConsoleAuthorization = false
         inputSource.setSessionRestricted(true)
         inputSource.stop()
         if lockLifecycle { _ = lifecycle.sessionLocked() }
@@ -638,20 +686,30 @@ public final class AppCoordinator: DebugScrubberSession {
         else { return }
         guard !isUnlocking else { return }
         isUnlocking = true
+        if explicitUnlock { hasExplicitConsoleAuthorization = true }
         defer {
             isUnlocking = false
-            if pendingExplicitUnlock {
-                pendingExplicitUnlock = false
-                // An intervening lock can invalidate the first capture. The
-                // explicit unlock event retries only after that attempt ends.
-                if sessionRestricted, isExplicitUnlockAuthorizedNow() {
-                    Task { @MainActor [weak self] in
-                        guard let self else { return }
-                        await self.screenDidUnlock(
-                            sessionAccess: self.sessionAccessNow(),
-                            onConsole: self.isCurrentConsoleNow()
-                        )
-                    }
+            let retryWake = pendingWakeRestore
+            let retryExplicitUnlock = pendingExplicitUnlock
+            pendingWakeRestore = false
+            pendingExplicitUnlock = false
+            let generation = sessionRestrictionGeneration
+            if sessionRestricted, retryWake, sessionAccessNow() == .active {
+                // A newer sleep or lock invalidates this queued wake.
+                Task { @MainActor [weak self] in
+                    guard let self, generation == self.sessionRestrictionGeneration else { return }
+                    await self.systemDidWake(sessionAccess: self.sessionAccessNow())
+                }
+            } else if sessionRestricted, retryExplicitUnlock,
+                      isExplicitUnlockAuthorizedNow() {
+                // Preserve the actual unlock event's session epoch. Never
+                // synthesize a new authorization after an intervening lock.
+                Task { @MainActor [weak self] in
+                    guard let self, generation == self.sessionRestrictionGeneration else { return }
+                    await self.screenDidUnlock(
+                        sessionAccess: self.sessionAccessNow(),
+                        onConsole: self.isCurrentConsoleNow()
+                    )
                 }
             }
         }
@@ -674,7 +732,7 @@ public final class AppCoordinator: DebugScrubberSession {
             guard (explicitUnlock ? isExplicitUnlockAuthorizedNow()
                     : sessionAccessNow() == .active), !sessionRestricted,
                   !isTerminating else {
-                restrictSession(lockLifecycle: true)
+                restrictSession(lockLifecycle: true, preservePendingEvidence: true)
                 refreshMenu()
                 return
             }
@@ -682,6 +740,7 @@ public final class AppCoordinator: DebugScrubberSession {
         }
         inputSource.setSessionRestricted(false)
         applyRuntimePolicy()
+        retryHIDAfterWakeIfNeeded()
         refreshMenu()
     }
 
@@ -694,6 +753,26 @@ public final class AppCoordinator: DebugScrubberSession {
     private func isExplicitUnlockAuthorizedNow() -> Bool {
         guard isCurrentConsoleNow() else { return false }
         return sessionAccessNow() != .restricted
+    }
+
+    private func isRuntimeSessionAuthorizedNow() -> Bool {
+        switch sessionAccessNow() {
+        case .active:
+            return true
+        case .unknown:
+            return hasExplicitConsoleAuthorization && isCurrentConsoleNow()
+        case .restricted:
+            return false
+        }
+    }
+
+    private func enforceRuntimeSession() -> Bool {
+        guard !sessionRestricted, isRuntimeSessionAuthorizedNow() else {
+            restrictSession(lockLifecycle: true)
+            refreshMenu()
+            return false
+        }
+        return true
     }
 
     private func runOnboardingIfEligible(explicitUnlock: Bool = false) {
