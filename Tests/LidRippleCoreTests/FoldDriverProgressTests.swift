@@ -101,6 +101,24 @@ private func sweepTrackingPeak(
     #expect(driver.state.progress > before)
 }
 
+@Test func anOlderDisplayTimestampCannotDoubleIntegrateTheSpring() {
+    let reference = FoldDriver()
+    let reordered = FoldDriver()
+    for driver in [reference, reordered] {
+        driver.ingest(.init(degrees: 120, timestamp: 0))
+        driver.ingest(.init(degrees: 100, timestamp: 0.1))
+        driver.ingest(.init(degrees: 60, timestamp: 0.2))
+        driver.tick(now: 0.216)
+    }
+
+    // A callback queued before the last frame can arrive afterward. It must
+    // not rewind the integration clock and make the next frame jump forward.
+    reordered.tick(now: 0.15)
+    let actual = reordered.tick(now: 0.232)
+    let expected = reference.tick(now: 0.232)
+    #expect(abs(actual.progress - expected.progress) < 1e-9)
+}
+
 @Test func scriptedUnfoldRunsFromSealedToZeroInExactlyTheSpecifiedTime() {
     let driver = FoldDriver()
     driver.signalSleep()
@@ -121,6 +139,145 @@ private func sweepTrackingPeak(
     while now < 100 + duration + 1 / 60.0 { now += 1 / 240.0; driver.tick(now: now) }
     #expect(driver.state.phase == .idle)
     #expect(driver.state.progress == 0)
+}
+
+@Test func firstPostUnlockAngleStartsAtTheCurrentLidPose() {
+    let driver = FoldDriver()
+    driver.signalSleep()
+    driver.beginScriptedUnfold(now: 10)
+
+    let aligned = driver.alignScriptedOpening(.init(degrees: 60, timestamp: 10.05))
+    let expected = (FoldTuning.default.openingTrackEndAngle - 60)
+        / (FoldTuning.default.openingTrackEndAngle - FoldTuning.default.sealAngle)
+    #expect(aligned.phase == .unfolding)
+    #expect(abs(aligned.progress - expected) < 1e-9)
+    #expect(driver.tick(now: 10.06).progress <= expected)
+
+    driver.trackScriptedOpening(.init(degrees: 70, timestamp: 10.2))
+    #expect(driver.tick(now: 10.22).progress < expected)
+}
+
+@Test func alreadyOpenLidDoesNotFoldTheDesktopBackwards() {
+    let driver = FoldDriver()
+    driver.signalSleep()
+    driver.beginScriptedUnfold(now: 10)
+
+    let aligned = driver.alignScriptedOpening(.init(degrees: 100, timestamp: 10.05))
+    #expect(aligned == .idle)
+    #expect(driver.tick(now: 10.2) == .idle)
+}
+
+@Test func invalidInputAndDisplayTimesCannotInterruptOrPoisonAnUnfold() {
+    let reference = FoldDriver()
+    let noisy = FoldDriver()
+    for driver in [reference, noisy] { driver.beginScriptedUnfold(now: 10) }
+    noisy.ingest(.init(degrees: .nan, timestamp: 10.1))
+    noisy.ingest(.init(degrees: 40, timestamp: .infinity))
+    noisy.tick(now: .nan)
+    noisy.tick(now: .infinity)
+    #expect(noisy.tick(now: 10.31) == reference.tick(now: 10.31))
+    #expect(noisy.tick(now: 10.7) == reference.tick(now: 10.7))
+}
+
+@Test func rejectedInputCannotChangeTheNextValidCloseFrame() {
+    let reference = FoldDriver()
+    let noisy = FoldDriver()
+    for index in 0..<60 {
+        let time = Double(index) / 60
+        let sample = AngleSample(degrees: 120 - Double(index) * 1.5, timestamp: time)
+        #expect(noisy.ingest(sample) == reference.ingest(sample))
+        noisy.ingest(.init(degrees: 0, timestamp: time))
+        noisy.ingest(.init(degrees: 0, timestamp: time - 1))
+        noisy.ingest(.init(degrees: .nan, timestamp: time + 0.001))
+        #expect(noisy.tick(now: time + 0.008) == reference.tick(now: time + 0.008))
+    }
+}
+
+@Test func slowPhysicalOpeningHoldsRevealUntilLidIsOpen() {
+    let driver = FoldDriver()
+    driver.signalSleep()
+    driver.beginScriptedUnfold(now: 100)
+
+    driver.trackScriptedOpening(.init(degrees: 45, timestamp: 100.1))
+    let halfway = driver.tick(now: 100.31)
+    #expect(halfway.phase == .unfolding)
+    #expect(halfway.progress > 0.5)
+
+    let deadline = driver.tick(now: 100.621)
+    #expect(deadline.phase == .unfolding)
+    #expect(deadline.progress > 0.5)
+
+    driver.trackScriptedOpening(.init(degrees: 70, timestamp: 100.8))
+    let further = driver.tick(now: 100.8)
+    #expect(further.progress < deadline.progress)
+    #expect(further.progress > 0)
+
+    for frame in 1...17 {
+        driver.tick(now: 100.8 + Double(frame) / 60)
+    }
+    driver.trackScriptedOpening(.init(degrees: 100, timestamp: 101.1))
+    #expect(driver.tick(now: 101.1).phase == .unfolding)
+    #expect(driver.tick(now: 101.5).phase == .idle)
+}
+
+@Test func wholeDegreeOpeningStepsAreSpreadAcrossDisplayFrames() {
+    let driver = FoldDriver()
+    let tuning = FoldTuning.default
+    driver.beginScriptedUnfold(now: 0)
+    driver.trackScriptedOpening(.init(degrees: 50, timestamp: 0.1))
+    for frame in 0...12 {
+        driver.tick(now: 0.8 + Double(frame) / 60)
+    }
+    let before = driver.state.progress
+
+    driver.trackScriptedOpening(.init(degrees: 51, timestamp: 1.01))
+    let first = driver.tick(now: 1.016).progress
+    let second = driver.tick(now: 1.033).progress
+    let rawStep = 1 / (tuning.openingTrackEndAngle - tuning.sealAngle)
+
+    #expect(first < before)
+    #expect(before - first < rawStep * 0.6)
+    #expect(second < first, "progress continues between sensor readings")
+    #expect(first >= (tuning.openingTrackEndAngle - 51)
+        / (tuning.openingTrackEndAngle - tuning.sealAngle))
+}
+
+@Test func scriptedOpeningJitterCannotRefoldAndStaleSamplesAreIgnored() {
+    let driver = FoldDriver()
+    driver.beginScriptedUnfold(now: 20)
+    driver.trackScriptedOpening(.init(degrees: 70, timestamp: 20.1))
+    let first = driver.tick(now: 20.7)
+    driver.trackScriptedOpening(.init(degrees: 60, timestamp: 20.8))
+    driver.trackScriptedOpening(.init(degrees: 12, timestamp: 20.2))
+    let second = driver.tick(now: 20.8)
+    #expect(second.progress <= first.progress)
+    #expect(second.phase == .unfolding)
+}
+
+@Test func stalledScriptedOpeningTimesOutSmoothly() {
+    let driver = FoldDriver()
+    let tuning = FoldTuning.default
+    driver.beginScriptedUnfold(now: 10)
+    driver.trackScriptedOpening(.init(degrees: 40, timestamp: 10.1))
+    let held = driver.tick(now: 10 + tuning.openingTrackHoldSeconds)
+    #expect(held.phase == .unfolding)
+    #expect(held.progress > 0)
+    let fading = driver.tick(now: 10 + tuning.openingTrackHoldSeconds + tuning.scriptedUnfoldSeconds / 2)
+    #expect(fading.progress > 0)
+    #expect(fading.progress < held.progress)
+    #expect(driver.tick(now: 10 + tuning.openingTrackHoldSeconds + tuning.scriptedUnfoldSeconds).phase == .idle)
+}
+
+@Test func losingSensorReleasesScriptedOpeningConstraint() {
+    let driver = FoldDriver()
+    driver.beginScriptedUnfold(now: 10)
+    driver.trackScriptedOpening(.init(degrees: 40, timestamp: 10.1))
+    #expect(driver.tick(now: 10.621).phase == .unfolding)
+    driver.clearScriptedOpeningTracking()
+    let fading = driver.tick(now: 10.64)
+    #expect(fading.phase == .unfolding)
+    #expect(fading.progress > 0)
+    #expect(driver.tick(now: 11.25).phase == .idle)
 }
 
 @Test func signalSleepDuringScriptedUnfoldStaysSealedOnNextTick() {

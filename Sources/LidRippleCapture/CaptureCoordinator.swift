@@ -105,6 +105,14 @@ public actor CaptureCoordinator {
     }
 
     public func freeze() async throws -> CapturedFrame {
+        try await freeze(waitingUpTo: 0)
+    }
+
+    /// Freezes the newest complete frame, optionally waiting for the first frame
+    /// after a cold stream start. The normal close path has already spent time in
+    /// `.armed` and uses `freeze()`. Unlock has no warm band, so it uses a short
+    /// bounded wait rather than racing the first ScreenCaptureKit callback.
+    public func freeze(waitingUpTo timeout: TimeInterval) async throws -> CapturedFrame {
         guard state == .warming, let session else {
             throw CaptureError.notWarming
         }
@@ -122,7 +130,11 @@ public actor CaptureCoordinator {
 
         let frame: CapturedFrame?
         do {
-            frame = try await session.latestFrame()
+            frame = try await newestFrame(
+                from: session,
+                waitingUpTo: max(timeout, 0),
+                generation: currentGeneration
+            )
         } catch {
             await session.stop()
             clearCycle(ifGeneration: currentGeneration)
@@ -145,6 +157,38 @@ public actor CaptureCoordinator {
         frozenFrame = frame
         state = .frozen
         return frame
+    }
+
+    private func newestFrame(
+        from session: any CaptureSession,
+        waitingUpTo timeout: TimeInterval,
+        generation expectedGeneration: UInt64
+    ) async throws -> CapturedFrame? {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(timeout))
+
+        while true {
+            try Task.checkCancellation()
+            guard generation == expectedGeneration, state == .warming else {
+                throw CancellationError()
+            }
+            let frame = try await session.latestFrame()
+
+            // `latestFrame()` is an actor/protocol suspension point. Reset, task
+            // cancellation, or the deadline can all happen while it is in flight,
+            // so validate the cycle again before accepting its result.
+            try Task.checkCancellation()
+            guard generation == expectedGeneration, state == .warming else {
+                throw CancellationError()
+            }
+
+            let now = clock.now
+            if let frame, timeout == 0 || now <= deadline { return frame }
+            guard timeout > 0, now < deadline else { return nil }
+
+            let remaining = now.duration(to: deadline)
+            try await Task.sleep(for: min(.milliseconds(8), remaining))
+        }
     }
 
     public func reset() async {

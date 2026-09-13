@@ -41,16 +41,33 @@ public struct FoldTuning: Codable, Equatable, Sendable {
     /// (e.g. unfolding -> idle). A numerical epsilon, not a feel-tuning knob.
     public var springSettleEpsilon: Double = 0.001
 
-    // MARK: Scripted unfold on unlock (spec FR-10)
+    // MARK: Post-unlock unfold (spec FR-10)
     public var scriptedUnfoldSeconds: Double = 0.620
+    /// An observed fully-open M4 lid reads about 100°, below `armAngle`.
+    /// Sensor-paced reveals reach zero by this angle; timed fallback ignores it.
+    public var openingTrackEndAngle: Double = 95
+    /// Rounds whole-degree HID steps into display-rate motion without letting
+    /// the reveal get ahead of the measured opening angle.
+    public var openingTrackSmoothingSeconds: Double = 0.050
+    /// Give the post-unlock HID source a brief chance to report the current
+    /// lid pose before displaying a fresh fold frame.
+    public var openingFirstSampleWaitSeconds: Double = 0.120
+    /// Stop waiting for a stalled or stale sensor after this many seconds.
+    /// Its constraint then fades out over `scriptedUnfoldSeconds`.
+    public var openingTrackHoldSeconds: Double = 2.0
 
     // MARK: Render (consumed in Plan 2; defined here so section 9.4 holds)
+    /// Delays the screen-space collapse so content remains legible through mid-close.
+    public var geometryProgressExponent: Double = 3.0
     public var squashExponentGain: Double = 1.8
     public var rotationDegrees: Double = 72
     public var blurRadiusPx: Double = 28
     public var blurProgressExponent: Double = 2.0
-    public var voidSpeed: Double = 1.15
-    public var voidSoftness: Double = 0.28
+    /// Keeps the dark boundary close to the hinge instead of climbing the panel.
+    public var voidSpeed: Double = 0.055
+    public var voidSoftness: Double = 0.09
+    /// Background and folded panel reach warm-black only near the final seal.
+    public var sealFadeStart: Double = 0.88
     public var rimWidth: Double = 0.012
     public var rimIntensity: Double = 0.35
     public var rimWidening: Double = 1.8
@@ -110,12 +127,18 @@ public struct FoldTuning: Codable, Equatable, Sendable {
             case "substepSeconds": substepSeconds = value
             case "springSettleEpsilon": springSettleEpsilon = value
             case "scriptedUnfoldSeconds": scriptedUnfoldSeconds = value
+            case "openingTrackEndAngle": openingTrackEndAngle = value
+            case "openingTrackSmoothingSeconds": openingTrackSmoothingSeconds = value
+            case "openingFirstSampleWaitSeconds": openingFirstSampleWaitSeconds = value
+            case "openingTrackHoldSeconds": openingTrackHoldSeconds = value
+            case "geometryProgressExponent": geometryProgressExponent = value
             case "squashExponentGain": squashExponentGain = value
             case "rotationDegrees": rotationDegrees = value
             case "blurRadiusPx": blurRadiusPx = value
             case "blurProgressExponent": blurProgressExponent = value
             case "voidSpeed": voidSpeed = value
             case "voidSoftness": voidSoftness = value
+            case "sealFadeStart": sealFadeStart = value
             case "rimWidth": rimWidth = value
             case "rimIntensity": rimIntensity = value
             case "rimWidening": rimWidening = value

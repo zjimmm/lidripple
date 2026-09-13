@@ -33,7 +33,7 @@ import LidRippleCore
         height: 40
     )
     try view.setPreviewSource(source)
-    #expect(!view.isPaused)
+    #expect(view.isPaused)
 
     view.update(.idle)
     #expect(view.isPaused)
@@ -47,4 +47,33 @@ import LidRippleCore
         backingScale: 2
     ) == CGSize(width: 201, height: 101))
     #expect(FoldMetalView.pixelSize(points: .zero, backingScale: 2) == CGSize(width: 1, height: 1))
+}
+
+@Test @MainActor func reducedQualityKeepsThePresentationAtSixtyFramesPerSecond() throws {
+    guard MTLCreateSystemDefaultDevice() != nil else { return }
+    let view = try FoldMetalView(frame: NSRect(x: 0, y: 0, width: 64, height: 40))
+
+    view.setReducedQuality(true)
+
+    #expect(view.preferredFramesPerSecond == 60)
+}
+
+@Test @MainActor func fallbackSourceCanDriveAnUnfoldWithoutCapturedContent() throws {
+    guard MTLCreateSystemDefaultDevice() != nil else { return }
+    let view = try FoldMetalView(frame: NSRect(x: 0, y: 0, width: 64, height: 40))
+
+    try view.useFallbackSource()
+    view.update(FoldState(phase: .unfolding, progress: 0.5, velocity: -1))
+
+    #expect(view.isPaused)
+}
+
+@Test @MainActor func sealedFrameDrawsOnceThenPauses() throws {
+    guard MTLCreateSystemDefaultDevice() != nil else { return }
+    let view = try FoldMetalView(frame: NSRect(x: 0, y: 0, width: 64, height: 40))
+    try view.useFallbackSource()
+
+    view.update(FoldState(phase: .sealed, progress: 1, velocity: 0))
+
+    #expect(view.isPaused)
 }

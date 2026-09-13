@@ -25,12 +25,23 @@ import LidRippleOverlay
     let coordinator = try CaptureCoordinator()
 
     do {
+        let clock = ContinuousClock()
+        let started = clock.now
         try await coordinator.warm(
             displayID: displayID,
             excludingWindowID: presenter.windowID
         )
-        try await Task.sleep(for: .milliseconds(750))
-        let frame = try await coordinator.freeze()
+        let warmCompleted = clock.now
+        let frame = try await coordinator.freeze(waitingUpTo: 0.75)
+        let frameReady = clock.now
+
+        print(String(
+            format: "CAPTURE_WARM_TIMING warm_start_ms=%.3f first_frame_after_warm_ms=%.3f total_ready_ms=%.3f configured_interval_ms=%.3f",
+            smokeSeconds(started.duration(to: warmCompleted)) * 1_000,
+            smokeSeconds(warmCompleted.duration(to: frameReady)) * 1_000,
+            smokeSeconds(started.duration(to: frameReady)) * 1_000,
+            1_000 / Double(CaptureConfiguration.warmFramesPerSecond)
+        ))
 
         let expectedWidth = Int(
             (screen.frame.width * screen.backingScaleFactor).rounded()
@@ -48,4 +59,9 @@ import LidRippleOverlay
         await coordinator.reset()
         throw error
     }
+}
+
+private func smokeSeconds(_ duration: Duration) -> Double {
+    let parts = duration.components
+    return Double(parts.seconds) + Double(parts.attoseconds) / 1e18
 }

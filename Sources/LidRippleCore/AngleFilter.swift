@@ -29,6 +29,9 @@ public struct AngleFilter {
 
     /// Returns the committed (deadbanded) angle for this sample.
     public mutating func process(_ sample: AngleSample) -> Double {
+        guard sample.degrees.isFinite, sample.timestamp.isFinite,
+              lastTimestamp.map({ sample.timestamp > $0 }) ?? true
+        else { return committed }
         guard let previous = filtered, let previousTime = lastTimestamp else {
             filtered = sample.degrees
             committed = sample.degrees

@@ -65,3 +65,22 @@ private func feed(
     _ = feed(&filter, angles: angles)
     #expect(abs(filter.velocity - ratePerSecond) < 6.0)
 }
+
+@Test func invalidAndReorderedSamplesDoNotPoisonSubsequentMotion() {
+    var reference = AngleFilter(tuning: .default)
+    var noisy = AngleFilter(tuning: .default)
+    _ = noisy.process(.init(degrees: .nan, timestamp: 0))
+    for index in 0..<60 {
+        let time = Double(index) / 60
+        let sample = AngleSample(degrees: 110 - Double(index), timestamp: time)
+        #expect(noisy.process(sample) == reference.process(sample))
+        let velocity = reference.velocity
+        for invalid in [
+            AngleSample(degrees: .infinity, timestamp: time + 0.001),
+            AngleSample(degrees: 0, timestamp: .nan),
+            AngleSample(degrees: 0, timestamp: time),
+            AngleSample(degrees: 0, timestamp: time - 1),
+        ] { _ = noisy.process(invalid) }
+        #expect(noisy.velocity == velocity)
+    }
+}

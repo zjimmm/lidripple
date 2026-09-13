@@ -25,6 +25,7 @@ public final class HIDAngleSource: LidAngleSource, @unchecked Sendable {
 
     private let pollHz: Double
     private let rawToDegrees: Double
+    private let serviceUnavailable: @Sendable () -> Void
     private let queue = DispatchQueue(label: "com.lidripple.sensor", qos: .userInteractive)
 
     /// Guards `device` and `timer` against concurrent access between the
@@ -48,6 +49,7 @@ public final class HIDAngleSource: LidAngleSource, @unchecked Sendable {
     private let stateLock = NSLock()
     private var device: IOHIDDevice?
     private var timer: DispatchSourceTimer?
+    private var readHealth: SensorReadHealth
 
     /// - Parameters:
     ///   - pollHz: sample cadence. Spec section 4 specifies 60 Hz.
@@ -57,9 +59,16 @@ public final class HIDAngleSource: LidAngleSource, @unchecked Sendable {
     ///     machine, Mac16,12, as supported) — NOT yet verified with a
     ///     physical lid sweep on this unit. Do not treat as confirmed until
     ///     a human checks it against known lid angles (Task 2, Step 6).
-    public init(pollHz: Double = 60, rawToDegrees: Double = 1.0) {
+    public init(
+        pollHz: Double = 60,
+        rawToDegrees: Double = 1.0,
+        consecutiveFailureThreshold: Int = 5,
+        serviceUnavailable: @escaping @Sendable () -> Void = {}
+    ) {
         self.pollHz = pollHz
         self.rawToDegrees = rawToDegrees
+        self.serviceUnavailable = serviceUnavailable
+        readHealth = SensorReadHealth(failureThreshold: consecutiveFailureThreshold)
     }
 
     public var isAvailable: Bool { SensorProbe.matchingDevice() != nil }
@@ -111,13 +120,19 @@ public final class HIDAngleSource: LidAngleSource, @unchecked Sendable {
         let source = DispatchSource.makeTimerSource(queue: queue)
         source.schedule(deadline: .now(), repeating: interval, leeway: .milliseconds(1))
         source.setEventHandler { [weak self] in
-            guard let self, let sample = self.read() else { return }
+            guard let self else { return }
+            guard let sample = self.read() else {
+                if self.recordRead(success: false) { self.serviceUnavailable() }
+                return
+            }
+            _ = self.recordRead(success: true)
             handler(sample)
         }
 
         stateLock.lock()
         self.device = device
         self.timer = source
+        readHealth = SensorReadHealth(failureThreshold: readHealth.failureThreshold)
         stateLock.unlock()
 
         source.resume()
@@ -165,5 +180,11 @@ public final class HIDAngleSource: LidAngleSource, @unchecked Sendable {
         guard let device, let rawValue = Self.readRawValue(from: device) else { return nil }
         let degrees = Double(rawValue) * rawToDegrees
         return AngleSample(degrees: degrees, timestamp: ProcessInfo.processInfo.systemUptime)
+    }
+
+    private func recordRead(success: Bool) -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return readHealth.record(success: success)
     }
 }

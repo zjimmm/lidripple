@@ -1,0 +1,70 @@
+{
+  "formatVersion": 1,
+  "status": "reference-analyzed-alignment-and-redistribution-pending",
+  "reference": {
+    "id": "apple-iphone-duo-product-film-us-2026",
+    "foldStartSeconds": 10.6106,
+    "foldCompleteSeconds": 11.745066666666666,
+    "durationSeconds": 1.1344666666666667,
+    "frameCount": 35,
+    "frameRate": 29.97002997002997,
+    "sourceManifest": "../../References/Duo/reference.json"
+  },
+  "candidate": {
+    "direction": "opening",
+    "curve": "smoothstep",
+    "tuning": "docs/fidelity/tuning.json (empty overrides on FoldTuning.default)",
+    "tuningSHA256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+    "source": "corrected foldStart panel frame (pending measured alignment)",
+    "sourceSHA256": null,
+    "runtimeDurationSeconds": 0.62,
+    "durationDifferenceSeconds": 0.5144666666666667,
+    "durationGatePass": false
+  },
+  "localArtifacts": {
+    "comparisonGIFSHA256": null,
+    "contactSheetSHA256": null,
+    "runManifestSHA256": null,
+    "metricsSHA256": null,
+    "checkedIntoRepository": false,
+    "reason": "Prior unaligned artifacts were invalidated. The foldStart outer panel is hand-occluded and the shot switches to a different inner panel, so the strict fixed same-content transform is not measurable; redistribution permission is also outstanding."
+  },
+  "visualReview": {
+    "date": "2026-09-12",
+    "reviewer": "Codex implementation review",
+    "result": "prior stretched-timeline comparison invalidated; runtime-timed candidate requires new review",
+    "observations": [
+      "The previous artifact stretched candidate progress to the reference duration and cannot support timing parity.",
+      "The runtime-timed 620 ms candidate must be regenerated before qualitative approval.",
+      "The reference is a horizontal opening shot with no literal black void; void parity remains an axis-normalized analogy, not a direct measurement."
+    ]
+  },
+  "performance": {
+    "machine": "Apple M4",
+    "coordinatorSchedulingP95Milliseconds": 0.013,
+    "firstTenGPUFrameMaximumMilliseconds": 3.706,
+    "submitToCompleteMaximumMilliseconds": 7.097,
+    "sourceSetupMilliseconds": 5.515,
+    "realCaptureReadyMilliseconds": 92.715,
+    "nativeFrameBudgetMilliseconds": 16.667,
+    "firstTenSubmitToCompletePass": true,
+    "measurementCommand": "LIDRIPPLE_FIDELITY_BENCHMARK=1 swift test --filter FirstFramesPerformanceTests -Xswiftc -warnings-as-errors",
+    "beforePipelinePrewarm": {"submitToCompleteMaximumMilliseconds": 29.515, "pass": false},
+    "observedRuns": [
+      {"sourceSetupMilliseconds": 5.515, "gpuMaximumMilliseconds": 3.706, "submitToCompleteMaximumMilliseconds": 5.190, "pass": true},
+      {"sourceSetupMilliseconds": 5.143, "gpuMaximumMilliseconds": 2.862, "submitToCompleteMaximumMilliseconds": 5.356, "pass": true},
+      {"sourceSetupMilliseconds": 5.399, "gpuMaximumMilliseconds": 2.774, "submitToCompleteMaximumMilliseconds": 4.822, "pass": true},
+      {"sourceSetupMilliseconds": 4.521, "gpuMaximumMilliseconds": 2.811, "submitToCompleteMaximumMilliseconds": 7.097, "pass": true},
+      {"sourceSetupMilliseconds": 5.035, "gpuMaximumMilliseconds": 3.425, "submitToCompleteMaximumMilliseconds": 5.315, "pass": true}
+    ],
+    "note": "A 1x1 synthetic render during renderer construction moved one-time Metal driver work before the first visible fold. Five independent test-process runs on an Apple M4 stayed below 16.667 ms, but this does not prove reboot-cold or M2 Air behavior."
+  },
+  "s6": {
+    "implemented": true,
+    "referenceMeasured": true,
+    "localFrameMatchedComparisonGenerated": false,
+    "comparisonGIFCommitted": false,
+    "complete": false,
+    "remainingGate": "Replace this two-panel/hand-occluded shot with lawfully redistributable, continuously visible real-device footage, or explicitly revise the strict fixed-alignment contract; then regenerate, review, and commit the comparison GIF."
+  }
+}

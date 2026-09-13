@@ -4,9 +4,30 @@ import LidRippleCore
 @testable import LidRippleRenderer
 
 @Test func foldUniformsHaveAnExplicitMetalCompatibleLayout() {
-    #expect(MemoryLayout<FoldUniforms>.size == 96)
-    #expect(MemoryLayout<FoldUniforms>.stride == 96)
+    #expect(MemoryLayout<FoldUniforms>.size == 112)
+    #expect(MemoryLayout<FoldUniforms>.stride == 112)
     #expect(MemoryLayout<FoldUniforms>.alignment == 16)
+}
+
+@Test func foldUniformsCarryReducedQualityWithoutChangingOtherInputs() {
+    let normal = FoldUniforms.make(
+        progress: 0.5,
+        tuning: .default,
+        viewportSize: SIMD2<Int>(320, 200),
+        sourceSize: SIMD2<Int>(640, 400)
+    )
+    let reduced = FoldUniforms.make(
+        progress: 0.5,
+        tuning: .default,
+        viewportSize: SIMD2<Int>(320, 200),
+        sourceSize: SIMD2<Int>(640, 400),
+        reducedQuality: true
+    )
+
+    #expect(normal.quality.x == 0)
+    #expect(reduced.quality.x == 1)
+    #expect(normal.geometry == reduced.geometry)
+    #expect(normal.cameraAndBlur == reduced.cameraAndBlur)
 }
 
 @Test func foldUniformsClampProgressAndInvalidDimensions() {
@@ -40,6 +61,8 @@ import LidRippleCore
     )
 
     #expect(uniforms.geometry.y == Float(tuning.squashExponentGain))
+    #expect(uniforms.quality.y == Float(tuning.geometryProgressExponent))
+    #expect(uniforms.quality.z == Float(tuning.sealFadeStart))
     #expect(uniforms.cameraAndBlur.z == Float(tuning.blurRadiusPx))
     #expect(uniforms.voidAndRim.x == Float(tuning.voidSpeed))
     #expect(uniforms.finish.y == Float(tuning.coolTintStrength))
@@ -59,6 +82,8 @@ import LidRippleCore
     guard let device = MTLCreateSystemDefaultDevice() else { return }
     let library = try FoldShaderLibrary.make(device: device)
 
+    #expect(library.makeFunction(name: "backdropVertex") != nil)
+    #expect(library.makeFunction(name: "backdropFragment") != nil)
     #expect(library.makeFunction(name: "foldVertex") != nil)
     #expect(library.makeFunction(name: "foldFragment") != nil)
     #expect(library.makeFunction(name: "gaussianHorizontal") != nil)

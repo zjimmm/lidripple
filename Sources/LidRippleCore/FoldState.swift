@@ -16,7 +16,7 @@ public enum FoldPhase: String, Codable, Sendable, CaseIterable {
 public struct FoldState: Equatable, Sendable {
     public let phase: FoldPhase
     /// 0 is fully unfolded, 1 is fully folded. May slightly exceed 1 up to
-    /// `FoldTuning.maxProgress`; the renderer reads the excess as extra void.
+    /// `FoldTuning.maxProgress`; the renderer treats the excess as fully sealed.
     public let progress: Double
     /// Rate of change of `progress`, per second.
     public let velocity: Double

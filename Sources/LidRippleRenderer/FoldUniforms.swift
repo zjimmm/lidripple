@@ -1,6 +1,6 @@
 import LidRippleCore
 
-/// Six 16-byte vectors keep the Swift and Metal layouts identical without
+/// Seven 16-byte vectors keep the Swift and Metal layouts identical without
 /// relying on compiler-specific padding between scalar and vector fields.
 struct FoldUniforms: Equatable, Sendable {
     /// progress, squash exponent gain, rotation radians, field-of-view radians
@@ -15,12 +15,15 @@ struct FoldUniforms: Equatable, Sendable {
     var dimensions: SIMD4<Float>
     /// warm-black RGB, blur extra-tap distance
     var colorAndTap: SIMD4<Float>
+    /// reduced-quality flag, geometry progress exponent, seal fade start, reserved
+    var quality: SIMD4<Float>
 
     static func make(
         progress: Double,
         tuning: FoldTuning,
         viewportSize: SIMD2<Int>,
-        sourceSize: SIMD2<Int>
+        sourceSize: SIMD2<Int>,
+        reducedQuality: Bool = false
     ) -> FoldUniforms {
         let clampedProgress = min(max(progress, 0), tuning.maxProgress)
         let degreesToRadians = Float.pi / 180
@@ -61,6 +64,12 @@ struct FoldUniforms: Equatable, Sendable {
                 Float(tuning.warmBlackGreen),
                 Float(tuning.warmBlackBlue),
                 Float(tuning.blurExtraTapDistance)
+            ),
+            quality: SIMD4<Float>(
+                reducedQuality ? 1 : 0,
+                Float(tuning.geometryProgressExponent),
+                Float(tuning.sealFadeStart),
+                0
             )
         )
     }

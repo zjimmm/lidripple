@@ -12,6 +12,7 @@ public final class FoldDriver {
 
     private var phase: FoldPhase = .idle
     private var lastTimestamp: TimeInterval?
+    private var lastInputTimestamp: TimeInterval?
 
     /// Direction gate: tracks how long motion has been consistently one way
     /// and how far it has travelled. Both must clear before a direction
@@ -22,9 +23,18 @@ public final class FoldDriver {
 
     /// Set while a scripted (angle-free) unfold is running. Spec FR-10.
     private var scriptedUnfoldStart: TimeInterval?
+    private var scriptedStartProgress: Double = 1
+    private var scriptedOpeningFloor: Double?
+    private var lastScriptedOpeningSampleTimestamp: TimeInterval?
+    private var scriptedReleaseStart: TimeInterval?
+    private var scriptedReleaseProgress: Double = 0
     private var lastTarget: Double = 0
+    /// A physical seal can reverse in clamshell mode; a sleep/lock seal cannot
+    /// consume angle input until the lifecycle explicitly resets or unlocks it.
+    private var sealedBySystem = false
 
     public private(set) var state: FoldState = .idle
+    public var openingFirstSampleWaitSeconds: Double { tuning.openingFirstSampleWaitSeconds }
 
     public init(tuning: FoldTuning = .default) {
         self.tuning = tuning
@@ -34,6 +44,12 @@ public final class FoldDriver {
 
     @discardableResult
     public func ingest(_ sample: AngleSample) -> FoldState {
+        // Validate before interrupting a reveal or touching the filter. The
+        // input clock is separate from display ticks, which may arrive first.
+        guard sample.degrees.isFinite, sample.timestamp.isFinite,
+              lastInputTimestamp.map({ sample.timestamp > $0 }) ?? true
+        else { return state }
+        lastInputTimestamp = sample.timestamp
         if scriptedUnfoldStart != nil {
             // A real angle sample arrived while a scripted (angle-free) unfold
             // was in progress. `publish()` has no awareness of the scripted
@@ -48,7 +64,10 @@ public final class FoldDriver {
         let angle = filter.process(sample)
         let velocity = filter.velocity
         let dt = lastTimestamp.map { max(sample.timestamp - $0, 0) } ?? 0
-        lastTimestamp = sample.timestamp
+        // Input can arrive on the main actor after a display tick that has a
+        // newer timestamp. Do not move the integration clock backwards: that
+        // would make the next display frame take an oversized spring step.
+        lastTimestamp = max(lastTimestamp ?? sample.timestamp, sample.timestamp)
 
         updateDirectionGate(angle: angle, velocity: velocity, now: sample.timestamp)
         advancePhase(angle: angle)
@@ -58,11 +77,16 @@ public final class FoldDriver {
     @discardableResult
     public func signalSleep() -> FoldState {
         phase = .sealed
+        sealedBySystem = true
         spring.reset(to: 1.0)
         // Clear any in-flight scripted unfold: otherwise the next `tick(now:)`
         // would still take the `scriptedUnfoldStart` branch and drive `phase`
         // back out of `.sealed`, undoing the seal.
         scriptedUnfoldStart = nil
+        scriptedStartProgress = 1
+        scriptedOpeningFloor = nil
+        lastScriptedOpeningSampleTimestamp = nil
+        scriptedReleaseStart = nil
         state = FoldState(phase: .sealed, progress: 1.0, velocity: 0)
         return state
     }
@@ -73,9 +97,15 @@ public final class FoldDriver {
         spring.reset(to: 0)
         filter = AngleFilter(tuning: tuning)
         lastTimestamp = nil
+        lastInputTimestamp = nil
         clearGate()
         scriptedUnfoldStart = nil
+        scriptedStartProgress = 1
+        scriptedOpeningFloor = nil
+        lastScriptedOpeningSampleTimestamp = nil
+        scriptedReleaseStart = nil
         lastTarget = 0
+        sealedBySystem = false
         state = .idle
         return state
     }
@@ -131,6 +161,7 @@ public final class FoldDriver {
         case .folding:
             if angle < tuning.sealAngle {
                 phase = .sealed
+                sealedBySystem = false
                 spring.reset(to: 1.0)
             } else if directionCommitted(closing: false, angle: angle, now: now) {
                 phase = .unfolding
@@ -143,7 +174,10 @@ public final class FoldDriver {
                 spring.reset(to: 0)
             }
         case .sealed:
-            break  // only signalSleep, reset, or the unlock path leave sealed
+            if !sealedBySystem,
+               directionCommitted(closing: false, angle: angle, now: now) {
+                phase = .unfolding
+            }
         }
     }
 
@@ -176,28 +210,60 @@ public final class FoldDriver {
         return state
     }
 
-    /// Advances the spring toward the last computed target without a new angle
-    /// sample. Two uses: the scripted unfold, which has no angle input at all,
-    /// and rendering at a display rate higher than the 60 Hz sensor rate.
+    /// Advances the spring or post-unlock reveal at display cadence.
     @discardableResult
     public func tick(now: TimeInterval) -> FoldState {
+        guard now.isFinite else { return state }
         let dt = lastTimestamp.map { max(now - $0, 0) } ?? 0
-        lastTimestamp = now
+        lastTimestamp = max(lastTimestamp ?? now, now)
         guard dt > 0 else { return state }
 
         if let start = scriptedUnfoldStart {
-            // The spring is deliberately bypassed here. Spec FR-10 wants a definite
-            // 620 ms, and pushing a linear ramp through a 220/26 spring lags it by
-            // rate * damping / stiffness, about 0.19 progress, which would stretch
-            // the reveal past 900 ms and leave a visible tail. With no lid to track
-            // there is nothing for the spring to buy, so drive the curve directly.
+            // The timed curve is a minimum reveal duration. On sensor-equipped
+            // Macs, a measured lid angle is a floor on fold progress, so the
+            // image cannot unfold faster than the lid. The spring is bypassed
+            // to avoid adding an unwanted tail to either path.
             let fraction = min(max((now - start) / tuning.scriptedUnfoldSeconds, 0), 1)
             let eased = fraction * fraction * (3 - 2 * fraction)   // smoothstep
-            let progress = 1.0 - eased
+            let elapsed = max(now - start, 0)
+            let timeoutFade = now >= start + tuning.openingTrackHoldSeconds
+                + tuning.scriptedUnfoldSeconds ? 0 : min(max(
+                    (tuning.openingTrackHoldSeconds + tuning.scriptedUnfoldSeconds - elapsed)
+                        / tuning.scriptedUnfoldSeconds, 0
+                ), 1)
+            let angleFloor = (scriptedOpeningFloor ?? 0) * timeoutFade
+            let releaseFloor: Double
+            if let releaseStart = scriptedReleaseStart {
+                let releaseFraction = min(max(
+                    (now - releaseStart) / tuning.scriptedUnfoldSeconds, 0
+                ), 1)
+                let releaseEased = releaseFraction * releaseFraction
+                    * (3 - 2 * releaseFraction)
+                releaseFloor = scriptedReleaseProgress * (1 - releaseEased)
+            } else {
+                releaseFloor = 0
+            }
+            // A delayed sample or 1° sensor jitter must never re-fold the image.
+            // The angle floor is quantized in whole degrees on the observed M4;
+            // ease each step over a few display frames. This filter approaches
+            // the target from above, so it cannot outrun the physical lid.
+            let target = min(state.progress, max(scriptedStartProgress * (1.0 - eased), angleFloor, releaseFloor))
+            let progress: Double
+            if scriptedOpeningFloor != nil, tuning.openingTrackSmoothingSeconds > 0 {
+                let retention = exp(-dt / tuning.openingTrackSmoothingSeconds)
+                progress = target + (state.progress - target) * retention
+            } else {
+                // No sensor: preserve the exact timed curve, including its end.
+                progress = target
+            }
             lastTarget = progress
             spring.reset(to: progress)   // keep spring state coherent for any later ingest
-            if fraction >= 1 {
+            if fraction >= 1, progress <= tuning.springSettleEpsilon {
                 scriptedUnfoldStart = nil
+                scriptedStartProgress = 1
+                scriptedOpeningFloor = nil
+                lastScriptedOpeningSampleTimestamp = nil
+                scriptedReleaseStart = nil
                 phase = .idle
                 spring.reset(to: 0)
                 state = .idle
@@ -206,7 +272,7 @@ public final class FoldDriver {
             state = FoldState(
                 phase: .unfolding,
                 progress: progress,
-                velocity: -6 * fraction * (1 - fraction) / tuning.scriptedUnfoldSeconds
+                velocity: (progress - state.progress) / dt
             )
             return state
         }
@@ -225,17 +291,66 @@ public final class FoldDriver {
         return state
     }
 
-    /// Spec FR-10: after the session unlocks, unfold a freshly captured frame
-    /// on a timed curve. The lid is already open, so there is no angle to
-    /// track and `tick(now:)` drives this to completion.
+    /// After unlock, reveal only a freshly captured frame. Sensor samples can
+    /// constrain this curve without entering the ordinary close-phase machine.
     @discardableResult
     public func beginScriptedUnfold(now: TimeInterval) -> FoldState {
         phase = .unfolding
+        sealedBySystem = false
         scriptedUnfoldStart = now
+        scriptedStartProgress = 1
+        scriptedOpeningFloor = nil
+        lastScriptedOpeningSampleTimestamp = nil
+        scriptedReleaseStart = nil
         lastTimestamp = now
         spring.reset(to: 1.0)
         clearGate()
         state = FoldState(phase: .unfolding, progress: 1.0, velocity: 0)
         return state
+    }
+
+    /// The first reading after a fresh unlock places the still-hidden fold at
+    /// the lid's actual pose. Starting at 1 here would visibly fold an already
+    /// exposed desktop backwards when ScreenCaptureKit finishes late.
+    @discardableResult
+    public func alignScriptedOpening(_ sample: AngleSample) -> FoldState {
+        guard scriptedUnfoldStart != nil,
+              sample.degrees.isFinite, sample.timestamp.isFinite,
+              sample.timestamp >= (lastScriptedOpeningSampleTimestamp ?? -.infinity)
+        else { return state }
+        trackScriptedOpening(sample)
+        guard let floor = scriptedOpeningFloor else { return state }
+        let progress = min(state.progress, floor)
+        if progress <= tuning.springSettleEpsilon { return reset() }
+        scriptedStartProgress = progress
+        scriptedUnfoldStart = max(lastTimestamp ?? sample.timestamp, sample.timestamp)
+        lastTimestamp = scriptedUnfoldStart
+        spring.reset(to: progress)
+        state = FoldState(phase: .unfolding, progress: progress, velocity: 0)
+        return state
+    }
+
+    /// Constrain a post-unlock reveal to a physical opening lid. A fully open
+    /// reading releases the constraint; absent samples preserve timed behavior.
+    public func trackScriptedOpening(_ sample: AngleSample) {
+        guard scriptedUnfoldStart != nil,
+              sample.degrees.isFinite, sample.timestamp.isFinite,
+              sample.timestamp >= (lastScriptedOpeningSampleTimestamp ?? -.infinity)
+        else { return }
+        lastScriptedOpeningSampleTimestamp = sample.timestamp
+        let span = tuning.openingTrackEndAngle - tuning.sealAngle
+        guard span > 0 else { return }
+        let floor = min(max((tuning.openingTrackEndAngle - sample.degrees) / span, 0), 1)
+        scriptedOpeningFloor = min(scriptedOpeningFloor ?? 1, floor)
+    }
+
+    /// A sensor loss must not leave the overlay waiting for a lid reading.
+    public func clearScriptedOpeningTracking() {
+        if scriptedUnfoldStart != nil, scriptedOpeningFloor != nil {
+            scriptedReleaseStart = lastTimestamp
+            scriptedReleaseProgress = state.progress
+        }
+        scriptedOpeningFloor = nil
+        lastScriptedOpeningSampleTimestamp = nil
     }
 }
