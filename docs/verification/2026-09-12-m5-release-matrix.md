@@ -70,6 +70,14 @@ the first ten lifecycle ticks had 0.001 ms maximum. With
 0.529 ms median and 0.737 ms p95. These are this M4's development measurements,
 not an M1 Pro baseline or physical end-to-end S2/S3 proof.
 
+Cask uninstall audit, 2026-09-13: the locally installed Homebrew 6.0.9 handles
+`uninstall login_item:` by asking System Events to remove a legacy login item
+by name. lidripple uses `SMAppService.mainApp`, so that stanza alone does not
+establish that a modern registration is removed. An installed, signed-app test
+must check actual Service Management status after uninstall; any app-specific
+unregistration fix must also preserve Launch at Login across cask upgrade and
+reinstall. The uninstall and zap rows remain unchecked.
+
 ## M4 / S6 fidelity prerequisite
 
 - [ ] `docs/fidelity/duo-comparison.gif` exists above the README fold

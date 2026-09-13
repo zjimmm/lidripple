@@ -137,8 +137,13 @@ uploading the asset. A different byte sequence is a different release candidate.
     brew uninstall --zap --cask lidripple
     ```
 
-    Confirm zap removes only lidripple state. If any gate fails, withdraw the release
-    rather than replacing bytes under the published versioned URL.
+    Confirm Service Management no longer reports lidripple's modern
+    `SMAppService.mainApp` registration after uninstall, and that upgrade/reinstall
+    preserves a user-enabled Launch at Login setting. Homebrew's `login_item:`
+    stanza targets legacy System Events login items; do not treat its presence as
+    proof of modern registration cleanup. Confirm zap removes only lidripple state.
+    If any gate fails, withdraw the release rather than replacing bytes under the
+    published versioned URL.
 
 ## Troubleshooting and rollback
 
