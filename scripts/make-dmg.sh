@@ -13,7 +13,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 version="$(tr -d '[:space:]' < "$repo_root/VERSION")"
 output="${2:-$repo_root/dist/lidripple-$version.dmg}"
 [[ "$output" = /* ]] || output="$PWD/$output"
-[[ ! -e "$output" && ! -e "$output.sha256" ]] || {
+[[ ! -e "$output" && ! -L "$output" &&
+   ! -e "$output.sha256" && ! -L "$output.sha256" ]] || {
     echo "Refusing to overwrite an existing DMG or checksum: $output" >&2
     exit 1
 }
@@ -29,7 +30,6 @@ ln -s /Applications "$stage/Applications"
 hdiutil create \
     -volname "lidripple" \
     -srcfolder "$stage" \
-    -ov \
     -format UDZO \
     "$output"
 (cd "$(dirname "$output")" && shasum -a 256 "$(basename "$output")") > "$output.sha256"

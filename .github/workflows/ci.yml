@@ -43,7 +43,9 @@ jobs:
           icon_dir="$RUNNER_TEMP/AppIcon.iconset"
           iconutil -c iconset Packaging/AppIcon.icns -o "$icon_dir"
           test "$(sips -g pixelWidth "$icon_dir/icon_512x512@2x.png" | awk '/pixelWidth/ { print $2 }')" = "1024"
-          bash -n scripts/*.sh
+          for script in scripts/*.sh; do
+            bash -n "$script"
+          done
 
       - name: Assemble and verify ad-hoc universal app
         shell: bash
@@ -70,3 +72,26 @@ jobs:
           scripts/make-dmg.sh "$RUNNER_TEMP/lidripple-dist/lidripple.app" "$dmg"
           (cd "$artifact_dir" && shasum -a 256 -c "lidripple-$version.dmg.sha256")
           hdiutil verify "$dmg"
+          mount_point="$(mktemp -d "$RUNNER_TEMP/lidripple-mount.XXXXXX")"
+          hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount_point" -quiet
+          trap 'hdiutil detach "$mount_point" -quiet' EXIT
+          test -L "$mount_point/Applications"
+          test "$(readlink "$mount_point/Applications")" = /Applications
+          test -d "$mount_point/lidripple.app"
+          diff -qr "$RUNNER_TEMP/lidripple-dist/lidripple.app" "$mount_point/lidripple.app"
+          hdiutil detach "$mount_point" -quiet
+          trap - EXIT
+          scripts/write-cask.sh --dmg "$dmg" --output "$artifact_dir/lidripple.rb"
+          ruby -c "$artifact_dir/lidripple.rb"
+          bad_dir="$RUNNER_TEMP/lidripple-bad-sidecar"
+          mkdir -p "$bad_dir"
+          cp "$dmg" "$bad_dir/lidripple-$version.dmg"
+          bad_dmg="$bad_dir/lidripple-$version.dmg"
+          digest="$(shasum -a 256 "$bad_dmg" | awk '{ print $1 }')"
+          printf '%s  wrong-name.dmg\n' "$digest" > "$bad_dmg.sha256"
+          if scripts/verify-release.sh --app "$RUNNER_TEMP/lidripple-dist/lidripple.app" \
+              --dmg "$bad_dmg" --skip-launch-smoke > "$bad_dir/verifier.log" 2>&1; then
+            echo "Verifier accepted a mislabeled sidecar" >&2
+            exit 1
+          fi
+          grep -Fq 'DMG checksum sidecar does not match the artifact' "$bad_dir/verifier.log"

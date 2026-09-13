@@ -75,7 +75,7 @@ fi
 
 output_dir="${output_dir:-$repo_root/dist}"
 app="$output_dir/lidripple.app"
-[[ ! -e "$app" ]] || {
+[[ ! -e "$app" && ! -L "$app" ]] || {
     echo "Refusing to overwrite existing bundle: $app" >&2
     exit 1
 }

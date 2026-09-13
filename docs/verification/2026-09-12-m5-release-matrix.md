@@ -78,6 +78,17 @@ must check actual Service Management status after uninstall; any app-specific
 unregistration fix must also preserve Launch at Login across cask upgrade and
 reinstall. The uninstall and zap rows remain unchecked.
 
+Release-verifier smoke, 2026-09-13: shell syntax passed for all packaging scripts.
+A fresh ad-hoc universal app and DMG built without replacing existing output;
+the mounted DMG had an `/Applications` symlink and a byte-for-byte identical app.
+The verifier rejected sidecars with a wrong filename or extra line, accepted the
+correctly named sidecar, then stopped at the expected unsigned-DMG gate. A
+temporary exact-checksum cask was generated. These checks do not substitute for
+Developer ID, notarization, Gatekeeper, or final-cask verification.
+CI now repeats per-script syntax, ad-hoc DMG mount/content checks, cask generation,
+and a mislabeled-sidecar rejection. The CI row stays unchecked until that workflow
+actually passes on the reviewed commit.
+
 ## M4 / S6 fidelity prerequisite
 
 - [ ] `docs/fidelity/duo-comparison.gif` exists above the README fold

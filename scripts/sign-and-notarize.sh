@@ -71,7 +71,8 @@ output="$(cd "$(dirname "$output")" && pwd)/$(basename "$output")"
     echo "App version does not match VERSION" >&2
     exit 1
 }
-[[ ! -e "$output" && ! -e "$output.sha256" ]] || {
+[[ ! -e "$output" && ! -L "$output" &&
+   ! -e "$output.sha256" && ! -L "$output.sha256" ]] || {
     echo "Refusing to overwrite an existing release artifact: $output" >&2
     exit 1
 }

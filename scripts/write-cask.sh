@@ -19,7 +19,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 [[ -f "$dmg" && -n "$output" ]] || { usage; exit 64; }
-[[ ! -e "$output" ]] || { echo "Refusing to overwrite $output" >&2; exit 1; }
+[[ ! -e "$output" && ! -L "$output" ]] || {
+    echo "Refusing to overwrite $output" >&2
+    exit 1
+}
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 version="$(tr -d '[:space:]' < "$repo_root/VERSION")"
@@ -34,9 +37,11 @@ version="$(tr -d '[:space:]' < "$repo_root/VERSION")"
 [[ -f "$dmg.sha256" ]] || { echo "Missing $dmg.sha256" >&2; exit 1; }
 expected="$(awk 'NR == 1 { print $1 }' "$dmg.sha256")"
 sidecar_name="$(awk 'NR == 1 { print $2 }' "$dmg.sha256")"
+sidecar_fields="$(awk 'NR == 1 { print NF }' "$dmg.sha256")"
 sidecar_lines="$(awk 'END { print NR }' "$dmg.sha256")"
 actual="$(shasum -a 256 "$dmg" | awk '{ print $1 }')"
-[[ "$sidecar_lines" == 1 && "$sidecar_name" == "$(basename "$dmg")" &&
+[[ "$sidecar_lines" == 1 && "$sidecar_fields" == 2 &&
+   "$sidecar_name" == "$(basename "$dmg")" &&
    "$expected" =~ ^[0-9a-f]{64}$ && "$expected" == "$actual" ]] || {
     echo "DMG checksum does not match its sidecar" >&2
     exit 1

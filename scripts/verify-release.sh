@@ -45,8 +45,14 @@ executable="$app/Contents/MacOS/lidripple"
 }
 [[ -f "$dmg.sha256" ]] || { echo "Missing checksum sidecar: $dmg.sha256" >&2; exit 1; }
 expected_sidecar_hash="$(awk 'NR == 1 { print $1 }' "$dmg.sha256")"
+sidecar_name="$(awk 'NR == 1 { print $2 }' "$dmg.sha256")"
+sidecar_fields="$(awk 'NR == 1 { print NF }' "$dmg.sha256")"
+sidecar_lines="$(awk 'END { print NR }' "$dmg.sha256")"
 actual_dmg_hash="$(shasum -a 256 "$dmg" | awk '{ print $1 }')"
-[[ "$expected_sidecar_hash" =~ ^[0-9a-f]{64}$ && "$expected_sidecar_hash" == "$actual_dmg_hash" ]] || {
+[[ "$sidecar_lines" == 1 && "$sidecar_fields" == 2 &&
+   "$sidecar_name" == "$(basename "$dmg")" &&
+   "$expected_sidecar_hash" =~ ^[0-9a-f]{64}$ &&
+   "$expected_sidecar_hash" == "$actual_dmg_hash" ]] || {
     echo "DMG checksum sidecar does not match the artifact" >&2
     exit 1
 }
@@ -99,7 +105,7 @@ signature_info="$(codesign -dvvv "$app" 2>&1)"
     echo "App is not signed with Developer ID Application" >&2
     exit 1
 }
-[[ "$signature_info" == *"runtime"* ]] || {
+grep -Eq '^CodeDirectory[[:space:]].*flags=[^[:space:]]*[(][^)]*runtime[^)]*[)]' <<< "$signature_info" || {
     echo "App signature does not enable the hardened runtime" >&2
     exit 1
 }
@@ -131,14 +137,16 @@ entries="$(find "$mount_point" -mindepth 1 -maxdepth 1 -print | sed "s|$mount_po
     echo "$entries" >&2
     exit 1
 }
-ditto "$mount_point/lidripple.app" "$install_root/lidripple.app"
-codesign --verify --deep --strict "$install_root/lidripple.app"
-cmp -s "$executable" "$install_root/lidripple.app/Contents/MacOS/lidripple" || {
-    echo "Mounted DMG executable differs from the verified app" >&2
+[[ -L "$mount_point/Applications" &&
+   "$(readlink "$mount_point/Applications")" == /Applications &&
+   -d "$mount_point/lidripple.app" && ! -L "$mount_point/lidripple.app" ]] || {
+    echo "DMG Applications shortcut or app type is invalid" >&2
     exit 1
 }
-cmp -s "$info" "$install_root/lidripple.app/Contents/Info.plist" || {
-    echo "Mounted DMG Info.plist differs from the verified app" >&2
+ditto "$mount_point/lidripple.app" "$install_root/lidripple.app"
+codesign --verify --deep --strict "$install_root/lidripple.app"
+diff -qr "$app" "$install_root/lidripple.app" || {
+    echo "Mounted DMG app differs from the verified app" >&2
     exit 1
 }
 
@@ -156,17 +164,21 @@ fi
 
 if [[ -n "$cask" ]]; then
     [[ -f "$cask" ]] || { echo "Missing cask: $cask" >&2; exit 1; }
-    expected="$(sed -nE 's/^[[:space:]]*sha256[[:space:]]+"([0-9a-f]{64})".*/\1/p' "$cask")"
+    ruby -c "$cask" >/dev/null
+    expected="$(sed -nE 's/^[[:space:]]*sha256[[:space:]]+"([0-9a-f]{64})"[[:space:]]*$/\1/p' "$cask")"
     [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || { echo "Cask has no exact SHA-256" >&2; exit 1; }
     actual="$(shasum -a 256 "$dmg" | awk '{print $1}')"
     [[ "$actual" == "$expected" ]] || { echo "Cask checksum does not match DMG" >&2; exit 1; }
-    grep -Eq '^[[:space:]]*version "'"$version"'"$' "$cask" || {
+    cask_version="$(sed -nE 's/^[[:space:]]*version[[:space:]]+"([^"]+)"[[:space:]]*$/\1/p' "$cask")"
+    [[ "$cask_version" == "$version" ]] || {
         echo "Cask version does not match VERSION" >&2
         exit 1
     }
     expected_literal_url="https://github.com/zjimmm/lidripple/releases/download/v$version/lidripple-$version.dmg"
     expected_interpolated_url='https://github.com/zjimmm/lidripple/releases/download/v#{version}/lidripple-#{version}.dmg'
-    grep -Fq "$expected_literal_url" "$cask" || grep -Fq "$expected_interpolated_url" "$cask" || {
+    cask_url="$(sed -nE 's/^[[:space:]]*url[[:space:]]+"([^"]+)"[[:space:]]*$/\1/p' "$cask")"
+    [[ "$cask_url" == "$expected_literal_url" ||
+       "$cask_url" == "$expected_interpolated_url" ]] || {
         echo "Cask URL does not match the immutable versioned artifact" >&2
         exit 1
     }
