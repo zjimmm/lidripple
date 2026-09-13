@@ -28,7 +28,7 @@ import LidRippleCore
     #expect(maximumError <= 2)
 }
 
-@Test func laterProgressConsumesMorePixelsIntoTheVoid() throws {
+@Test func midClosePreservesSceneColorAndOnlyFinalSealTurnsNearBlack() throws {
     let context = try RendererTestContext()
     let source = try context.makeTexture(
         width: 96,
@@ -37,10 +37,72 @@ import LidRippleCore
     )
     try context.renderer.setSource(texture: source)
 
-    let early = try context.render(progress: 0.25, width: 96, height: 64)
+    let middle = try context.render(progress: 0.5, width: 96, height: 64)
     let late = try context.render(progress: 0.75, width: 96, height: 64)
+    let sealed = try context.render(progress: 1, width: 96, height: 64)
 
-    #expect(warmBlackPixelCount(late) > warmBlackPixelCount(early))
+    let pixelCount = 96 * 64
+    #expect(warmBlackPixelCount(middle) < pixelCount / 20)
+    #expect(warmBlackPixelCount(late) < pixelCount / 20)
+    #expect(warmBlackPixelCount(sealed) > pixelCount * 9 / 10)
+
+    // The source-derived backing, rather than warm-black clear color, fills
+    // the exposed top of the screen while the panel folds toward the hinge.
+    let topCenter = (2 * 96 + 48) * 4
+    #expect(late[topCenter] > 170)
+    #expect(late[topCenter + 1] > 170)
+    #expect(late[topCenter + 2] > 170)
+}
+
+@Test func exposedBackingDoesNotRepeatLargeSourceWindows() throws {
+    let width = 96
+    let height = 64
+    let context = try RendererTestContext()
+    var bytes = [UInt8](repeating: 0, count: width * height * 4)
+    for y in 0..<height {
+        for x in 0..<width {
+            let offset = (y * width + x) * 4
+            let color: [UInt8] = x < width / 2
+                ? [30, 60, 210, 255] : [230, 235, 245, 255]
+            bytes[offset..<(offset + 4)] = color[0..<4]
+        }
+    }
+    try context.renderer.setSource(texture: context.makeTexture(
+        width: width, height: height, bytes: bytes
+    ))
+
+    let frame = try context.render(progress: 0.75, width: width, height: height)
+    let exposedRow = 2
+    let backingPixels = [8, 48, 88].map { x in
+        let offset = (exposedRow * width + x) * 4
+        return Array(frame[offset..<(offset + 4)])
+    }
+    #expect(backingPixels[0] == backingPixels[1])
+    #expect(backingPixels[1] == backingPixels[2])
+    #expect(backingPixels[0][0] > 80)
+    #expect(backingPixels[0][2] > 80)
+}
+
+@Test func hingeShadowIsLocalInsteadOfClimbingAcrossThePanel() throws {
+    var tuning = FoldTuning.default
+    tuning.rotationDegrees = 0
+    tuning.squashExponentGain = 0
+    tuning.blurRadiusPx = 0
+    tuning.rimIntensity = 0
+    tuning.coolTintStrength = 0
+    tuning.vignetteStrength = 0
+    tuning.ditherAmplitude = 0
+    let context = try RendererTestContext(tuning: tuning)
+    let source = try context.makeSolidTexture(width: 64, height: 40, bgra: [220, 220, 220, 255])
+    try context.renderer.setSource(texture: source)
+
+    let rendered = try context.render(progress: 0.75, width: 64, height: 40)
+    let top = (2 * 64 + 32) * 4
+    let middle = (20 * 64 + 32) * 4
+    let hinge = (39 * 64 + 32) * 4
+    #expect(rendered[top] > 200)
+    #expect(rendered[middle] > 200)
+    #expect(rendered[hinge] < 120)
 }
 
 @Test func replacingSourceBuildsOnceAndChangesTheNextFrame() throws {

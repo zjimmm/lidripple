@@ -15,7 +15,7 @@ struct FoldUniforms: Equatable, Sendable {
     var dimensions: SIMD4<Float>
     /// warm-black RGB, blur extra-tap distance
     var colorAndTap: SIMD4<Float>
-    /// reduced-quality flag, reserved, reserved, reserved
+    /// reduced-quality flag, geometry progress exponent, seal fade start, reserved
     var quality: SIMD4<Float>
 
     static func make(
@@ -67,8 +67,8 @@ struct FoldUniforms: Equatable, Sendable {
             ),
             quality: SIMD4<Float>(
                 reducedQuality ? 1 : 0,
-                0,
-                0,
+                Float(tuning.geometryProgressExponent),
+                Float(tuning.sealFadeStart),
                 0
             )
         )

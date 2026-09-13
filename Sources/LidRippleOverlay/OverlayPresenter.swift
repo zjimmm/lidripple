@@ -148,17 +148,17 @@ public final class OverlayPresenter {
     }
 
     public func update(_ state: FoldState) {
-        presentation.update(state)
         window.alphaValue = fallbackReveal
             ? CGFloat(min(max(state.progress, 0), 1))
             : 1
 
         switch state.phase {
         case .idle, .armed:
-            window.orderOut(nil)
+            if window.isVisible { window.orderOut(nil) }
         case .folding, .unfolding, .sealed:
-            window.orderFrontRegardless()
+            if !window.isVisible { window.orderFrontRegardless() }
         }
+        presentation.update(state)
     }
 
     var windowForTesting: OverlayWindow { window }

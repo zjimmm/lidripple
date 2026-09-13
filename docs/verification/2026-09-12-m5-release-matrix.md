@@ -114,11 +114,14 @@ CI on the reviewed release commit.
 
 - [ ] `docs/fidelity/duo-comparison.gif` exists above the README fold
 - [ ] Reference source, license/provenance, alignment method, and frame timing recorded
-- [ ] Blur onset, void climb rate, and total duration reviewed at frame-matched parity
+- [ ] Blur onset, retained-content/hinge-shadow progression, and total duration reviewed at frame-matched parity
 - [ ] Human reviewer acceptance recorded with reviewer/date
 
 M4 status at matrix creation: pending; no GIF or subjective approval was available to
 record here.
+The 2026-09-13 retained-content renderer revision also requires fresh M4 candidate
+measurements and human visual review; the earlier `docs/fidelity/report.json` is
+historical evidence, not acceptance of these frames.
 
 ## Screen Recording and privacy (fresh macOS profile)
 

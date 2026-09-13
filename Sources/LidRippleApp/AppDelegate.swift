@@ -2,11 +2,13 @@ import AppKit
 import CoreGraphics
 import LidRippleAppSupport
 import LidRippleIntegration
+import OSLog
 
 /// Thin AppKit bridge. Product policy and ownership live in AppCoordinator so
 /// notification ordering can be tested without a real TCC prompt or desktop.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let wakeLog = Logger(subsystem: "com.lidripple.app", category: "wake")
     private var coordinator: AppCoordinator?
     private var unavailableStatusItem: NSStatusItem?
     private var isObservingSystemNotifications = false
@@ -176,16 +178,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    @objc private func willSleep() { coordinator?.systemWillSleep() }
+    @objc private func willSleep() {
+        wakeLog.notice("willSleep")
+        coordinator?.systemWillSleep()
+    }
 
     @objc private func didWake() {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.coordinator?.systemDidWake(sessionAccess: self.currentSessionAccess())
+            let access = self.currentSessionAccess()
+            self.wakeLog.notice("didWake access=\(String(describing: access), privacy: .public)")
+            await self.coordinator?.systemDidWake(sessionAccess: access)
         }
     }
 
-    @objc private func screenDidLock() { coordinator?.screenDidLock() }
+    @objc private func screenDidLock() {
+        wakeLog.notice("screenDidLock")
+        coordinator?.screenDidLock()
+    }
 
     @objc private func screenDidUnlock() {
         guard let eventCoordinator = coordinator else { return }
@@ -196,6 +206,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Allow the lock-state dictionary to catch up with the public
             // notification, while the generation binds it to this event.
             let session = self.currentSessionSnapshot()
+            self.wakeLog.notice(
+                "screenDidUnlock access=\(String(describing: session.access), privacy: .public) onConsole=\(session.onConsole)"
+            )
             await eventCoordinator.screenDidUnlock(
                 sessionAccess: session.access,
                 onConsole: session.onConsole,
@@ -204,9 +217,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func sessionResignedActive() { coordinator?.sessionResignedActive() }
+    @objc private func sessionResignedActive() {
+        wakeLog.notice("sessionResignedActive")
+        coordinator?.sessionResignedActive()
+    }
     @objc private func sessionBecameActive() {
-        coordinator?.sessionBecameActive(sessionAccess: currentSessionAccess())
+        let access = currentSessionAccess()
+        wakeLog.notice("sessionBecameActive access=\(String(describing: access), privacy: .public)")
+        coordinator?.sessionBecameActive(sessionAccess: access)
     }
     @objc private func displayConfigurationChanged() {
         if let coordinator {

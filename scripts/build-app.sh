@@ -3,21 +3,28 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: scripts/build-app.sh [--release] [--adhoc-sign] [--output DIR]
+Usage: scripts/build-app.sh [--release] [--adhoc-sign | --sign-identity ID] [--output DIR]
 
 Builds arm64 and x86_64 release executables, combines them into a universal
-lidripple.app, and optionally applies an ad-hoc signature. --release requires a
-clean main checkout. Developer ID signing is performed by sign-and-notarize.sh.
+lidripple.app, and optionally signs it. --sign-identity accepts a local code-signing
+identity for development builds; unlike --adhoc-sign, it keeps a stable macOS
+Screen Recording permission identity across rebuilds. --release requires a clean
+main checkout. Developer ID signing is performed by sign-and-notarize.sh.
 EOF
 }
 
 release_build=0
 adhoc_sign=0
+sign_identity=""
 output_dir=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --release) release_build=1; shift ;;
         --adhoc-sign) adhoc_sign=1; shift ;;
+        --sign-identity)
+            [[ $# -ge 2 ]] || { usage >&2; exit 64; }
+            [[ -n "$2" ]] || { usage >&2; exit 64; }
+            sign_identity="$2"; shift 2 ;;
         --output)
             [[ $# -ge 2 ]] || { usage >&2; exit 64; }
             output_dir="$2"; shift 2 ;;
@@ -25,6 +32,11 @@ while [[ $# -gt 0 ]]; do
         *) echo "Unknown argument: $1" >&2; usage >&2; exit 64 ;;
     esac
 done
+
+[[ "$adhoc_sign" -eq 0 || -z "$sign_identity" ]] || {
+    echo "Choose either --adhoc-sign or --sign-identity, not both" >&2
+    exit 64
+}
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
@@ -122,8 +134,10 @@ architectures="$(lipo -archs "$staged_app/Contents/MacOS/lidripple")"
     exit 1
 }
 
-if [[ "$adhoc_sign" -eq 1 ]]; then
-    codesign --force --options runtime --sign - \
+if [[ "$adhoc_sign" -eq 1 || -n "$sign_identity" ]]; then
+    signature="-"
+    if [[ -n "$sign_identity" ]]; then signature="$sign_identity"; fi
+    codesign --force --options runtime --sign "$signature" \
         --entitlements Packaging/lidripple.entitlements "$staged_app"
     codesign --verify --deep --strict --verbose=2 "$staged_app"
 fi

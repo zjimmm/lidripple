@@ -18,9 +18,16 @@ import Foundation
     #expect(t.feedForward == 0.06)
     #expect(t.maxProgress == 1.06)
     #expect(t.substepSeconds == 1.0 / 240.0)
+    #expect(t.scriptedUnfoldSeconds == 0.620)
+    #expect(t.openingTrackEndAngle == 95)
+    #expect(t.openingTrackSmoothingSeconds == 0.050)
+    #expect(t.openingTrackHoldSeconds == 2.0)
+    #expect(t.geometryProgressExponent == 3.0)
     #expect(t.rotationDegrees == 72)
     #expect(t.blurRadiusPx == 28)
-    #expect(t.voidSpeed == 1.15)
+    #expect(t.voidSpeed == 0.055)
+    #expect(t.voidSoftness == 0.09)
+    #expect(t.sealFadeStart == 0.88)
     #expect(t.fieldOfViewDegrees == 38)
     #expect(t.eyeDistanceScreenHeights == 1.1)
     #expect(t.ditherAmplitude == 1.5 / 255.0)
@@ -48,19 +55,26 @@ import Foundation
     #expect(soft.damping == base.damping)
     #expect(soft.substepSeconds == base.substepSeconds)
     #expect(soft.directionHoldSeconds == base.directionHoldSeconds)
+    #expect(soft.openingTrackEndAngle == base.openingTrackEndAngle)
+    #expect(soft.openingTrackSmoothingSeconds == base.openingTrackSmoothingSeconds)
+    #expect(soft.openingTrackHoldSeconds == base.openingTrackHoldSeconds)
     #expect(soft.fieldOfViewDegrees == base.fieldOfViewDegrees)
+    #expect(soft.geometryProgressExponent == base.geometryProgressExponent)
+    #expect(soft.sealFadeStart == base.sealFadeStart)
     #expect(soft.rimIntensity == base.rimIntensity)
     #expect(soft.coolTintStrength == base.coolTintStrength)
 }
 
 @Test func everyRenderOverrideIsApplied() throws {
     let overrides: [String: Double] = [
+        "geometryProgressExponent": 2.5,
         "squashExponentGain": 1.1,
         "rotationDegrees": 60,
         "blurRadiusPx": 20,
         "blurProgressExponent": 1.7,
         "voidSpeed": 1.0,
         "voidSoftness": 0.2,
+        "sealFadeStart": 0.9,
         "rimWidth": 0.02,
         "rimIntensity": 0.25,
         "rimWidening": 2.2,
@@ -78,12 +92,14 @@ import Foundation
     var tuning = FoldTuning.default
     try tuning.apply(overrides: overrides)
 
+    #expect(tuning.geometryProgressExponent == 2.5)
     #expect(tuning.squashExponentGain == 1.1)
     #expect(tuning.rotationDegrees == 60)
     #expect(tuning.blurRadiusPx == 20)
     #expect(tuning.blurProgressExponent == 1.7)
     #expect(tuning.voidSpeed == 1.0)
     #expect(tuning.voidSoftness == 0.2)
+    #expect(tuning.sealFadeStart == 0.9)
     #expect(tuning.rimWidth == 0.02)
     #expect(tuning.rimIntensity == 0.25)
     #expect(tuning.rimWidening == 2.2)

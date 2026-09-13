@@ -6,6 +6,7 @@ import LidRippleCore
 import LidRippleIntegration
 import LidRippleOverlay
 import LidRippleSensor
+import QuartzCore
 
 /// The lifecycle surface composed by the menu-bar application. Keeping this
 /// interface separate from the concrete coordinator lets policy tests prove
@@ -85,6 +86,24 @@ public final class RunLoopAppAnimationScheduler: AppAnimationScheduling {
         interval: TimeInterval,
         action: @escaping @MainActor () -> Void
     ) -> any AppAnimationCancellation {
+        if let screen = BuiltInDisplay.screen() {
+            let cancellation = DisplayLinkAnimationCancellation(action: action)
+            let link = screen.displayLink(
+                target: cancellation,
+                selector: #selector(DisplayLinkAnimationCancellation.fire(_:))
+            )
+            let fps = Float(1 / interval)
+            link.preferredFrameRateRange = CAFrameRateRange(
+                minimum: fps,
+                maximum: fps,
+                preferred: fps
+            )
+            cancellation.link = link
+            link.add(to: .main, forMode: .common)
+            return cancellation
+        }
+
+        // Retain a timer only for a transient display-reconfiguration gap.
         let cancellation = TimerAnimationCancellation()
         let timer = Timer(timeInterval: interval, repeats: true) { _ in
             MainActor.assumeIsolated { action() }
@@ -92,6 +111,25 @@ public final class RunLoopAppAnimationScheduler: AppAnimationScheduling {
         cancellation.timer = timer
         RunLoop.main.add(timer, forMode: .common)
         return cancellation
+    }
+}
+
+@MainActor
+private final class DisplayLinkAnimationCancellation: NSObject, AppAnimationCancellation {
+    var link: CADisplayLink?
+    private let action: @MainActor () -> Void
+
+    init(action: @escaping @MainActor () -> Void) {
+        self.action = action
+    }
+
+    @objc func fire(_ link: CADisplayLink) {
+        action()
+    }
+
+    func cancel() {
+        link?.invalidate()
+        link = nil
     }
 }
 
@@ -333,7 +371,7 @@ public final class AppCoordinator: DebugScrubberSession {
     }
 
     public func screenRecordingAction() {
-        guard !sessionRestricted, sessionAccessNow() == .active else { return }
+        guard !sessionRestricted, isRuntimeSessionAuthorizedNow() else { return }
         let state: ScreenRecordingPermissionState
         switch permission.state {
         case .granted:
@@ -369,7 +407,7 @@ public final class AppCoordinator: DebugScrubberSession {
 
     public func openDebugScrubber() {
         guard isStarted, !isTerminating, !sessionRestricted,
-              sessionAccessNow() == .active else { return }
+              isRuntimeSessionAuthorizedNow() else { return }
         let generation = debugSessionGeneration
         Task { @MainActor [weak self] in
             guard let self, generation == self.debugSessionGeneration,
@@ -409,6 +447,11 @@ public final class AppCoordinator: DebugScrubberSession {
 
     public func systemDidWake(sessionAccess: ConsoleSessionAccess) async {
         inputSource.cancelFallbackTransition()
+        // On systems that omit the lock-state key, an explicit unlock may have
+        // already authorized and started the fresh reveal before didWake lands.
+        // An ambiguous wake is not new authority, but it must not revoke that
+        // newer positive proof either.
+        if sessionAccess == .unknown, isRuntimeSessionAuthorizedNow() { return }
         guard sessionAccess == .active, sessionAccessNow() == .active else {
             restrictSession(lockLifecycle: true)
             refreshMenu()
@@ -475,6 +518,9 @@ public final class AppCoordinator: DebugScrubberSession {
 
     public func sessionBecameActive(sessionAccess: ConsoleSessionAccess) {
         guard isStarted, !isTerminating else { return }
+        // The explicit unlock is the authority on hosts whose private
+        // lock-state key remains absent even after the desktop is active.
+        if sessionAccess == .unknown, isRuntimeSessionAuthorizedNow() { return }
         guard sessionAccess == .active, sessionAccessNow() == .active else {
             restrictSession(lockLifecycle: true)
             refreshMenu()
@@ -510,7 +556,7 @@ public final class AppCoordinator: DebugScrubberSession {
 
     public func prepareDebugSession(intensity: Double) async throws {
         guard isStarted, !isTerminating, !sessionRestricted,
-              sessionAccessNow() == .active else { throw CancellationError() }
+              isRuntimeSessionAuthorizedNow() else { throw CancellationError() }
         debugSessionGeneration &+= 1
         let generation = debugSessionGeneration
         isDebugging = true
@@ -519,7 +565,7 @@ public final class AppCoordinator: DebugScrubberSession {
         _ = lifecycle.setEnabled(false)
         await lifecycle.waitForPendingCapture()
         guard generation == debugSessionGeneration, !isTerminating,
-              !sessionRestricted, sessionAccessNow() == .active else {
+              !sessionRestricted, isRuntimeSessionAuthorizedNow() else {
             throw CancellationError()
         }
         do {

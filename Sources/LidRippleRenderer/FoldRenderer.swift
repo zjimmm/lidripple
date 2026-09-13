@@ -4,8 +4,8 @@ import LidRippleCapture
 import LidRippleCore
 
 /// Converts one frozen captured frame and one progress value into a Metal target.
-/// Pipeline, mesh, and sampler state are immutable; per-frame work is limited to
-/// one uniform write and one indexed draw.
+/// Pipelines, mesh, and sampler state are immutable; per-frame work is limited
+/// to one uniform write and two indexed draws (contextual backing, folded panel).
 public final class FoldRenderer {
     public let device: any MTLDevice
     public var tuning: FoldTuning {
@@ -23,6 +23,7 @@ public final class FoldRenderer {
     public var fragmentBlurTapCount: Int { isReducedQuality ? 1 : 3 }
 
     private let commandQueue: any MTLCommandQueue
+    private let backdropPipeline: any MTLRenderPipelineState
     private let renderPipeline: any MTLRenderPipelineState
     private let gaussianPipelines: GaussianPipelines
     private let vertexBuffer: any MTLBuffer
@@ -82,6 +83,20 @@ public final class FoldRenderer {
         renderDescriptor.vertexDescriptor = vertexDescriptor
         renderDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
         renderPipeline = try device.makeRenderPipelineState(descriptor: renderDescriptor)
+
+        guard let backdropVertex = library.makeFunction(name: "backdropVertex") else {
+            throw RendererError.shaderFunctionMissing("backdropVertex")
+        }
+        guard let backdropFragment = library.makeFunction(name: "backdropFragment") else {
+            throw RendererError.shaderFunctionMissing("backdropFragment")
+        }
+        let backdropDescriptor = MTLRenderPipelineDescriptor()
+        backdropDescriptor.label = "lidripple contextual backing"
+        backdropDescriptor.vertexFunction = backdropVertex
+        backdropDescriptor.fragmentFunction = backdropFragment
+        backdropDescriptor.vertexDescriptor = vertexDescriptor
+        backdropDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+        backdropPipeline = try device.makeRenderPipelineState(descriptor: backdropDescriptor)
 
         let mesh = try FoldMesh.make()
         let madeVertexBuffer: (any MTLBuffer)? = mesh.vertices.withUnsafeBytes { bytes in
@@ -334,7 +349,6 @@ public final class FoldRenderer {
             throw RendererError.commandEncoderCreationFailed
         }
         encoder.label = "lidripple fold frame"
-        encoder.setRenderPipelineState(renderPipeline)
         encoder.setCullMode(.none)
         encoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
         encoder.setVertexBuffer(uniformBuffer, offset: 0, index: 1)
@@ -342,6 +356,15 @@ public final class FoldRenderer {
         encoder.setFragmentTexture(blueNoise, index: 1)
         encoder.setFragmentSamplerState(sampler, index: 0)
         encoder.setFragmentBuffer(uniformBuffer, offset: 0, index: 1)
+        encoder.setRenderPipelineState(backdropPipeline)
+        encoder.drawIndexedPrimitives(
+            type: .triangle,
+            indexCount: indexCount,
+            indexType: .uint32,
+            indexBuffer: indexBuffer,
+            indexBufferOffset: 0
+        )
+        encoder.setRenderPipelineState(renderPipeline)
         encoder.drawIndexedPrimitives(
             type: .triangle,
             indexCount: indexCount,

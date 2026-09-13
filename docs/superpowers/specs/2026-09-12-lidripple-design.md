@@ -171,10 +171,13 @@ next.
   visible failure. Lock state is detected via `kCGSSessionOnConsoleKey` and the
   `com.apple.screenIsLocked` / `com.apple.screenIsUnlocked` notifications.
 - FR-10. On successful unlock, when the active session, built-in display, and Screen
-  Recording permission allow capture, the app captures a **fresh** frame and unfolds it
-  from progress 1 to 0 over 620 ms on a spring-shaped curve. If those conditions are
-  absent, it stays sealed without drawing. Unfolding the pre-sleep capture would be an
-  obvious tell; the user must see the desktop as it is now.
+  Recording permission allow capture, the app captures a **fresh** frame and unfolds it.
+  The 620 ms curve is a minimum reveal duration. If a lid-angle sensor is available,
+  measured opening angle prevents the reveal from outrunning the lid; an absent or
+  stalled sensor falls back to a bounded timed finish. Sensor-less mode uses the 620 ms
+  curve alone. If the capture conditions are absent, the app stays sealed without
+  drawing. Unfolding the pre-sleep capture would be an obvious tell; the user must see
+  the desktop as it is now. Movement before unlock cannot be drawn above `loginwindow`.
 
 ### 7.4 Sensor-less Macs (limited mode)
 
@@ -246,8 +249,8 @@ traces, instead of debugging by closing a laptop four hundred times.
         +------------------+------------------+
                            v
                      FoldRenderer
-              (Metal: mesh warp -> mip blur
-               -> void horizon -> rim light)
+              (Metal: delayed mesh warp + blurred
+               backdrop -> mip blur -> hinge shadow)
 ```
 
 ### 8.1 Modules
@@ -315,7 +318,7 @@ angle; finishing later means finishing invisibly.
 - stiffness `k ≈ 220`, damping `c ≈ 26` (ζ ≈ 0.88, slight overshoot on fast input)
 - integrated at a fixed 1/240 s substep for stability regardless of sample jitter
 - feed-forward term `α·θ̇` with `α ≈ 0.06`, so fast closes lead slightly
-- output clamped to `[0, 1.06]`; the renderer reads values above 1 as extra void
+- output clamped to `[0, 1.06]`; the renderer treats values above 1 as fully sealed
 
 The spring buys three things at once: slow closes feel viscous rather than mechanical,
 reversal flows instead of snapping direction, and sensor jitter is absorbed rather than
@@ -335,10 +338,10 @@ displayed.
 
 Driven by progress `p` and source row `v` (0 at the hinge/bottom, 1 at the top).
 
-1. **Non-rigid squash.** 16×64 tessellated mesh. `v' = pow(v, 1 + 1.8p)` crowds upper
-   rows toward the hinge far harder than lower ones. This non-uniformity is the
-   "drawn into the hinge" signature and the core visual differentiator.
-2. **Perspective.** Rotate the mesh about the hinge axis by `p · 72°` through a
+1. **Non-rigid squash.** 16×64 tessellated mesh. Let `q = clamp(p, 0, 1)³` and
+   `v' = pow(v, 1 + 1.8q)`. Delaying geometric collapse keeps screen content
+   visible through mid-close; upper rows still crowd into the hinge near seal.
+2. **Perspective.** Rotate the mesh about the hinge axis by `q · 72°` through a
    short-focal projection (fov ≈ 38°, eye ≈ 1.1 screen-heights back, slightly above).
    Horizontal narrowing of receding rows falls out of the projection for free; that
    narrowing is what reads as 3D rather than as a vertical scale.
@@ -347,26 +350,32 @@ Driven by progress `p` and source row `v` (0 at the hinge/bottom, 1 at the top).
    `r = p² · (0.15 + 1.85·v^1.4) · 28px`, converted to a fractional mip LOD and sampled
    trilinearly with one extra tap to hide banding. The `p²` makes blur arrive late, so
    early motion stays crisp — a large part of why the real effect feels expensive.
-4. **Void horizon.** `smoothstep((v − 1.15p) / 0.28)` climbs a dark line up the image,
-   consuming rows as `p → 1`. Blend toward a faint warm-black, never pure `#000`: pure
-   black reads as a dead pixel region instead of depth.
-5. **Rim light.** A narrow specular band riding the horizon,
-   `exp(−((v − 1.15p) / 0.012)²)`, cool-tinted, additive at ~0.35, widening with `p`.
-   Plus a whole-frame cool tint ramp and a subtle vignette. This is the layer that reads
-   as glass folding rather than a texture fading.
-6. **Blue-noise dither** at 1.5/255 before output. Not optional: stages 4 and 5 are large
-   smooth dark gradients and will band visibly on an 8-bit path.
+4. **Local hinge shadow.** The former rising void was rejected in owner visual review:
+   it hid too much content compared with the Duo fold slider. Keep the dark boundary
+   near the hinge with `smoothstep((v − 0.055p) / 0.09)` rather than climbing the panel.
+5. **Rim light.** A narrow specular band rides that local boundary,
+   `exp(−((v − 0.055p) / 0.012)²)`, cool-tinted, additive at ~0.35, widening with `p`.
+   A whole-frame cool tint and subtle vignette remain.
+6. **Source-derived backing and final seal.** Fill the exposed area behind the folded
+   mesh with one spatially uniform color averaged from fixed points in the captured
+   frame's last prebuilt blur mip. Do not repeat recognizable desktop content behind
+   the moving panel. Fade both
+   backdrop and panel toward warm-black only from `p = 0.88` to `p = 1`. A sealed frame
+   remains near-black; no live desktop is exposed behind the overlay.
+7. **Blue-noise dither** at 1.5/255 before folded-panel output to limit banding on
+   the dark hinge gradient and final seal.
 
 Rendered at native backing scale into the overlay's `CAMetalLayer`, vsync on, triple
 buffered.
 
 ### 9.4 Tuning
 
-All ~12 constants live in one `FoldTuning` struct — thresholds, `k`, `c`, `α`, the 1.8
-squash exponent, 72° rotation, 28 px blur radius, the `p²` exponent, 1.15 void speed, rim
-width. The struct is `Codable` and hot-reloadable from a JSON override file while
-scrubbing. Tuning is a data change, not a rebuild. This is what makes converging on the
-real animation's feel tractable.
+All visual constants live in one `FoldTuning` struct — thresholds, `k`, `c`, `α`, the 1.8
+squash exponent, 3.0 geometry-progress exponent, 72° rotation, 28 px blur radius,
+the `p²` blur exponent, 0.055 hinge-shadow advance, 0.09 shadow softness, 0.88 seal
+fade start, and rim width. The struct is `Codable` and hot-reloadable from a JSON
+override file while scrubbing. Tuning is a data change, not a rebuild. This makes
+converging on the real animation's feel tractable.
 
 ---
 
@@ -459,7 +468,7 @@ part of the product, and one piece of it comes first.
 | S3 | No hitch at fold start | Frame times across the first 10 frames within one refresh interval |
 | S4 | Free when idle | Idle CPU < 0.2%, zero GPU work, no capture stream with lid open and static |
 | S5 | Clean reversal | Reversal from any progress returns to `idle` with no visual pop; verified across replay traces |
-| S6 | Fidelity to the original | Frame-matched side-by-side against real iPhone Duo footage — blur onset, void climb rate, total duration at subjective parity — committed to the repo as a GIF |
+| S6 | Fidelity to the original | Frame-matched side-by-side against real iPhone Duo footage — blur onset, retained-content/hinge-shadow progression, total duration at subjective parity — committed to the repo as a GIF |
 | S7 (v1) | Sensor-less mode degrades safely | Automated no-HID selection/recovery, idle ownership, immediate sleep seal, fresh post-unlock capture/unfold, permission handling, and accurate limited-mode copy. Physical sensor-less behavior and a visible close are unverified post-v1 qualifications, not v1 pass criteria. |
 
 S6 is the one that decides whether the project met its goal. It is subjective by nature,

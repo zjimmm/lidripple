@@ -30,13 +30,51 @@ enum FoldShaderLibrary {
         float panelV;
     };
 
+    vertex FoldVaryings backdropVertex(FoldVertex input [[stage_in]])
+    {
+        FoldVaryings output;
+        output.position = float4(input.position, 0.0f, 1.0f);
+        output.textureCoordinate = input.textureCoordinate;
+        output.panelV = 1.0f - input.textureCoordinate.y;
+        return output;
+    }
+
+    fragment float4 backdropFragment(
+        FoldVaryings input [[stage_in]],
+        texture2d<float> source [[texture(0)]],
+        sampler sourceSampler [[sampler(0)]],
+        constant FoldUniforms &uniforms [[buffer(1)]])
+    {
+        // The six-level mip still contains large window silhouettes. Average
+        // fixed points instead of sampling at the fragment's screen position:
+        // the revealed backing keeps the scene's color, but no second copy of
+        // its content can appear behind the moving panel.
+        const float maxLOD = max(float(source.get_num_mip_levels()) - 1.0f, 0.0f);
+        float3 backingColor = float3(0.0f);
+        for (uint row = 0; row < 3; ++row) {
+            for (uint column = 0; column < 3; ++column) {
+                const float2 point = (float2(column, row) + 0.5f) / 3.0f;
+                backingColor += source.sample(sourceSampler, point, level(maxLOD)).rgb;
+            }
+        }
+        backingColor *= 1.0f / 9.0f;
+        const float sealFade = smoothstep(
+            uniforms.quality.z, 1.0f, clamp(uniforms.geometry.x, 0.0f, 1.0f)
+        );
+        return float4(mix(backingColor, uniforms.colorAndTap.xyz, sealFade), 1.0f);
+    }
+
     vertex FoldVaryings foldVertex(
         FoldVertex input [[stage_in]],
         constant FoldUniforms &uniforms [[buffer(1)]])
     {
         const float progress = uniforms.geometry.x;
         const float squashGain = uniforms.geometry.y;
-        const float rotation = uniforms.geometry.z * progress;
+        const float geometryProgress = pow(
+            clamp(progress, 0.0f, 1.0f),
+            max(uniforms.quality.y, 0.01f)
+        );
+        const float rotation = uniforms.geometry.z * geometryProgress;
         const float fieldOfView = uniforms.geometry.w;
         const float eyeDistance = uniforms.cameraAndBlur.x;
         const float eyeOffset = uniforms.cameraAndBlur.y;
@@ -44,7 +82,7 @@ enum FoldShaderLibrary {
         // Texture coordinates use Metal's top-left convention, while panelV is
         // defined by the design as zero at the bottom hinge.
         const float panelV = 1.0f - input.textureCoordinate.y;
-        const float squashedV = pow(panelV, 1.0f + squashGain * progress);
+        const float squashedV = pow(panelV, 1.0f + squashGain * geometryProgress);
         const float depth = squashedV * sin(rotation);
         const float rotatedHeight = squashedV * cos(rotation);
         const float focalScale = 1.0f / tan(max(fieldOfView, 0.01f) * 0.5f);
@@ -55,7 +93,7 @@ enum FoldShaderLibrary {
         output.position = float4(
             input.position.x * perspective,
             -1.0f + 2.0f * rotatedHeight * perspective
-                + eyeOffset * depth * progress,
+                + eyeOffset * depth * geometryProgress,
             0.0f,
             1.0f
         );
@@ -119,6 +157,11 @@ enum FoldShaderLibrary {
         const float2 centered = input.textureCoordinate * 2.0f - 1.0f;
         const float vignette = smoothstep(0.35f, 1.25f, length(centered));
         color.rgb *= 1.0f - uniforms.finish.z * progress * vignette;
+
+        const float sealFade = smoothstep(
+            uniforms.quality.z, 1.0f, clamp(progress, 0.0f, 1.0f)
+        );
+        color.rgb = mix(color.rgb, warmBlack, sealFade);
 
         const uint2 noiseCoordinate = uint2(input.position.xy)
             % uint2(blueNoise.get_width(), blueNoise.get_height());

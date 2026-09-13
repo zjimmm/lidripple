@@ -138,6 +138,40 @@ struct AppCoordinatorTests {
         #expect(harness.input.startCount == 1)
     }
 
+    @Test func statusMenuAuthorizesPermissionActionWhenLockKeyIsMissing() async {
+        let harness = makeHarness(permissionGranted: false, requestResult: true)
+        harness.sessionAccess.value = .unknown
+        harness.coordinator.start(sessionAccess: .unknown)
+
+        harness.coordinator.screenRecordingAction()
+        #expect(harness.permissionService.requestCount == 0)
+
+        harness.coordinator.menuDidOpen()
+        for _ in 0..<100 where harness.onboarding.presentCount == 0 {
+            await Task.yield()
+        }
+        harness.coordinator.screenRecordingAction()
+
+        #expect(harness.permissionService.requestCount == 1)
+        #expect(harness.coordinator.menuController.snapshot.screenRecording == .granted)
+        #expect(harness.input.startCount == 1)
+    }
+
+    @Test func statusMenuAuthorizesDebugPreviewWhenLockKeyIsMissing() async throws {
+        let harness = makeHarness(permissionGranted: true)
+        harness.sessionAccess.value = .unknown
+        harness.coordinator.start(sessionAccess: .unknown)
+
+        harness.coordinator.menuDidOpen()
+        for _ in 0..<100 where harness.input.startCount == 0 {
+            await Task.yield()
+        }
+        try await harness.coordinator.prepareDebugSession(intensity: 0.5)
+
+        #expect(harness.debugPresenter.beginTunings.last?.intensity == 0.5)
+        #expect(harness.coordinator.isDebugging)
+    }
+
     @Test func statusMenuCannotUnlockAnOffConsoleSession() async {
         let harness = makeHarness(permissionGranted: true)
         harness.sessionAccess.value = .unknown
@@ -266,6 +300,36 @@ struct AppCoordinatorTests {
         await harness.coordinator.screenDidUnlock(sessionAccess: .unknown, onConsole: true)
         #expect(harness.events.values.contains("fresh-unfold"))
         #expect(harness.input.startCount == 1)
+    }
+
+    @Test func ambiguousWakeAndActivationCannotCancelAnExplicitUnfold() async {
+        let harness = makeHarness(permissionGranted: true)
+        harness.coordinator.start(sessionAccess: .restricted)
+        harness.sessionAccess.value = .unknown
+        await harness.coordinator.screenDidUnlock(sessionAccess: .unknown, onConsole: true)
+        #expect(harness.animation.activeCount == 1)
+
+        await harness.coordinator.systemDidWake(sessionAccess: .unknown)
+        harness.coordinator.sessionBecameActive(sessionAccess: .unknown)
+
+        #expect(harness.lifecycle.unlockCount == 1)
+        #expect(harness.animation.activeCount == 1)
+        #expect(harness.input.startCount == 1)
+        #expect(!harness.input.sessionRestricted)
+    }
+
+    @Test func ambiguousWakeStillCannotAuthorizeWithoutExplicitUnlock() async {
+        let harness = makeHarness(permissionGranted: true)
+        harness.coordinator.start(sessionAccess: .restricted)
+        harness.sessionAccess.value = .unknown
+
+        await harness.coordinator.systemDidWake(sessionAccess: .unknown)
+        harness.coordinator.sessionBecameActive(sessionAccess: .unknown)
+
+        #expect(harness.lifecycle.unlockCount == 0)
+        #expect(harness.animation.activeCount == 0)
+        #expect(harness.input.startCount == 0)
+        #expect(harness.input.sessionRestricted)
     }
 
     @Test func explicitUnlockRejectsUnknownNonConsoleSession() async {

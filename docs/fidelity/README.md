@@ -54,6 +54,10 @@ Candidate progress uses `FoldTuning.scriptedUnfoldSeconds` (currently 620 ms) on
 reference timestamps. It is not stretched to the 1.134467-second film envelope. Consequently
 the duration gate currently fails by 514.467 ms, which is useful evidence rather than a
 comparison configured to pass itself.
+The checked-in `report.json` predates the 2026-09-13 retained-content renderer
+revision (delayed geometry, local hinge shadow, non-duplicating contextual backing, late seal fade).
+Its candidate metrics and tuning hash are historical, not approval of the revised
+renderer; regenerate and review them before claiming S6.
 The corrected `foldStart` panel frame is the renderer source; the CLI does not accept a
 separate image that could make the two sides incomparable.
 

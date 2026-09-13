@@ -14,6 +14,12 @@ Recording permission allow it. Both modes use the same Swift state machine,
 ScreenCaptureKit freeze frame, and Metal renderer; a sensor-less close animation is not
 currently available.
 
+After unlock, a sensor-equipped Mac holds the fresh-frame opening reveal to the
+measured lid angle and smooths its whole-degree steps, with a 620 ms minimum and a
+bounded timeout if readings stall.
+Sensor-less Macs use the timed reveal. The app cannot show the part of an opening
+that happens before macOS unlocks the desktop.
+
 The checked-in [M4 evidence](docs/fidelity/README.md) records reference provenance,
 timing analysis, local artifact hashes, and the remaining acceptance gaps. The required
 side-by-side artifact will be placed at `docs/fidelity/duo-comparison.gif` only after a
@@ -101,17 +107,20 @@ The input angle is filtered and mapped through hysteretic phases (`idle → arme
 folding → sealed`). During folding, target progress comes from the angle interval and a
 damped spring adds momentum while remaining reversible. The renderer transforms a
 subdivided panel around its bottom hinge. A vertical coordinate `v` is compressed as
-`v^(1 + squash × progress)`, then perspective-rotated. Progressively stronger,
-position-dependent blur consumes detail; a rising warm-black void, cool rim, vignette,
-and blue-noise dither finish the image. Opening runs the same motion backward when angle
-samples are available, or performs a fresh scripted reveal after unlock.
+`v^(1 + squash × progress³)`, then perspective-rotated; delaying the geometry keeps
+content visible through mid-close. A scene-derived, spatially uniform color fills
+the exposed background without repeating the frozen desktop. Position-dependent blur softens the panel, a narrow hinge
+shadow and rim give it depth, and only the final seal fades to near-black. Opening runs
+the same motion backward when angle samples are available, or performs a fresh scripted
+reveal after unlock.
 
 See the [design specification](docs/superpowers/specs/2026-09-12-lidripple-design.md)
 and [sensor evidence](docs/sensor.md) for the full contracts and known hardware caveats.
 M3 lifecycle evidence is recorded in the
 [integration matrix](docs/verification/2026-09-12-m3-manual-matrix.md). The
-[M4 fidelity report](docs/fidelity/report.json) records the current measured result; the
-comparison artifact remains a release gate until it is lawful to publish and accepted.
+The [M4 fidelity report](docs/fidelity/report.json) records measurements from before
+the 2026-09-13 retained-content renderer revision; it must be rerun for this candidate.
+The comparison artifact remains a release gate until it is lawful to publish and accepted.
 
 ## Build and test
 
@@ -128,6 +137,12 @@ universal app with:
 ```sh
 scripts/build-app.sh --adhoc-sign
 ```
+
+For repeated local builds on a Mac with a code-signing certificate, use
+`scripts/build-app.sh --sign-identity "<identity hash>"` instead. Find the hash with
+`security find-identity -v -p codesigning`. Certificate signing keeps a stable
+Screen Recording permission identity across rebuilds; switching from an ad-hoc
+build still requires granting permission to the newly signed app once.
 
 Developer ID signing, notarization, artifact verification, and cask publication are
 maintainer procedures documented in [docs/releasing.md](docs/releasing.md). They require

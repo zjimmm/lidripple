@@ -61,6 +61,8 @@ import LidRippleCore
     )
 
     #expect(uniforms.geometry.y == Float(tuning.squashExponentGain))
+    #expect(uniforms.quality.y == Float(tuning.geometryProgressExponent))
+    #expect(uniforms.quality.z == Float(tuning.sealFadeStart))
     #expect(uniforms.cameraAndBlur.z == Float(tuning.blurRadiusPx))
     #expect(uniforms.voidAndRim.x == Float(tuning.voidSpeed))
     #expect(uniforms.finish.y == Float(tuning.coolTintStrength))
@@ -80,6 +82,8 @@ import LidRippleCore
     guard let device = MTLCreateSystemDefaultDevice() else { return }
     let library = try FoldShaderLibrary.make(device: device)
 
+    #expect(library.makeFunction(name: "backdropVertex") != nil)
+    #expect(library.makeFunction(name: "backdropFragment") != nil)
     #expect(library.makeFunction(name: "foldVertex") != nil)
     #expect(library.makeFunction(name: "foldFragment") != nil)
     #expect(library.makeFunction(name: "gaussianHorizontal") != nil)

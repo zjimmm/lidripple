@@ -2,11 +2,13 @@ import CoreGraphics
 import Foundation
 import LidRippleCapture
 import LidRippleCore
+import OSLog
 
 /// Serializes the sensor -> driver -> capture -> overlay path and owns every
 /// lifecycle escape hatch that can invalidate an in-flight capture.
 @MainActor
 public final class FoldLifecycleCoordinator {
+    private let wakeLog = Logger(subsystem: "com.lidripple.app", category: "wake")
     public typealias DisplayIDProvider = @MainActor () -> CGDirectDisplayID?
 
     public private(set) var state: FoldState
@@ -54,6 +56,9 @@ public final class FoldLifecycleCoordinator {
     private var captureTask: Task<Void, Never>?
     private var frameInstalled = false
     private var requiresScriptedUnfold = false
+    private var hasLoggedOpeningSample = false
+    private var awaitingFirstOpeningSample = false
+    private var firstOpeningSampleDeadline: TimeInterval?
     private var targetDisplayID: CGDirectDisplayID?
     private var isEnabled = true
     private var sessionAccess: SessionAccess = .active
@@ -86,9 +91,34 @@ public final class FoldLifecycleCoordinator {
         guard isEnabled,
               sessionAccess == .active,
               displayAvailable,
-              inputAvailability != .unavailable,
-              !requiresScriptedUnfold
+              inputAvailability != .unavailable
         else { return state }
+
+        if requiresScriptedUnfold {
+            if inputAvailability == .sensor {
+                if awaitingFirstOpeningSample, sample.degrees.isFinite,
+                   sample.timestamp.isFinite {
+                    let previous = state.phase
+                    state = driver.alignScriptedOpening(sample)
+                    awaitingFirstOpeningSample = false
+                    firstOpeningSampleDeadline = nil
+                    if state.phase == .idle {
+                        applyTransition(from: previous, to: state, renderActive: false)
+                    } else if frameInstalled {
+                        output?.update(state)
+                        overlayVisible = true
+                        wakeLog.notice("freshUnfold overlayShown firstAngle=\(sample.degrees)")
+                    }
+                } else {
+                    driver.trackScriptedOpening(sample)
+                }
+                if !hasLoggedOpeningSample, sample.degrees.isFinite {
+                    hasLoggedOpeningSample = true
+                    wakeLog.notice("freshUnfold sensorPacing firstAngle=\(sample.degrees)")
+                }
+            }
+            return state
+        }
 
         let previous = state.phase
         state = driver.ingest(sample)
@@ -100,6 +130,12 @@ public final class FoldLifecycleCoordinator {
     @discardableResult
     public func tick(now: TimeInterval) -> FoldState {
         guard isEnabled, sessionAccess == .active, displayAvailable else { return state }
+        if awaitingFirstOpeningSample,
+           let deadline = firstOpeningSampleDeadline, now >= deadline {
+            awaitingFirstOpeningSample = false
+            firstOpeningSampleDeadline = nil
+            wakeLog.notice("freshUnfold firstAngleTimedOut")
+        }
         let previous = state.phase
         state = driver.tick(now: now)
         applyTransition(from: previous, to: state, renderActive: true)
@@ -144,6 +180,8 @@ public final class FoldLifecycleCoordinator {
               sessionAccess == .locked || (sessionAccess == .active && requiresScriptedUnfold)
         else { return state }
 
+        wakeLog.notice("freshUnfold begin")
+
         sessionAccess = .active
         let cycle = beginNewCycle(clearOutput: true, hide: true)
 
@@ -170,12 +208,14 @@ public final class FoldLifecycleCoordinator {
             let frame = try await capture.freeze(waitingUpTo: firstFrameTimeout)
             guard isCurrent(cycle) else { return state }
             try output.setSource(frame)
+            wakeLog.notice("freshUnfold capturedFrameInstalled")
             frameInstalled = true
             captureActivity = .frozen
             usesFallbackReveal = false
             lastCaptureErrorDescription = nil
         } catch {
             guard isCurrent(cycle) else { return state }
+            wakeLog.error("freshUnfold captureFailed type=\(String(describing: type(of: error)), privacy: .public)")
             lastCaptureErrorDescription = String(describing: error)
             do {
                 try output?.setFallbackSource()
@@ -192,10 +232,19 @@ public final class FoldLifecycleCoordinator {
             guard isCurrent(cycle) else { return state }
         }
 
-        state = driver.beginScriptedUnfold(now: now())
-        if frameInstalled {
+        hasLoggedOpeningSample = false
+        let revealStart = now()
+        state = driver.beginScriptedUnfold(now: revealStart)
+        awaitingFirstOpeningSample = frameInstalled && !usesFallbackReveal
+            && inputAvailability == .sensor
+        firstOpeningSampleDeadline = awaitingFirstOpeningSample
+            ? revealStart + driver.openingFirstSampleWaitSeconds : nil
+        if frameInstalled && !awaitingFirstOpeningSample {
             output?.update(state)
             overlayVisible = true
+            wakeLog.notice("freshUnfold overlayShown fallback=\(self.usesFallbackReveal)")
+        } else if !frameInstalled {
+            wakeLog.error("freshUnfold noFrame")
         }
         return state
     }
@@ -291,6 +340,17 @@ public final class FoldLifecycleCoordinator {
     public func setInputAvailability(_ availability: FoldInputAvailability) -> FoldState {
         let wasAvailable = inputAvailability != .unavailable
         inputAvailability = availability
+        if availability != .sensor {
+            if awaitingFirstOpeningSample {
+                awaitingFirstOpeningSample = false
+                firstOpeningSampleDeadline = nil
+                if frameInstalled, state.phase == .unfolding {
+                    output?.update(state)
+                    overlayVisible = true
+                }
+            }
+            driver.clearScriptedOpeningTracking()
+        }
         if availability == .unavailable,
            wasAvailable,
            isEnabled,
@@ -340,6 +400,8 @@ public final class FoldLifecycleCoordinator {
         output?.clearSource()
         output?.hide()
         frameInstalled = false
+        awaitingFirstOpeningSample = false
+        firstOpeningSampleDeadline = nil
         captureActivity = .idle
         overlayVisible = false
         await capture.reset()
@@ -357,6 +419,9 @@ public final class FoldLifecycleCoordinator {
     ) {
         switch next.phase {
         case .idle:
+            if previous == .unfolding, requiresScriptedUnfold {
+                wakeLog.notice("freshUnfold completed")
+            }
             requiresScriptedUnfold = false
             if previous != .idle {
                 output?.update(next)
@@ -375,7 +440,7 @@ public final class FoldLifecycleCoordinator {
             }
 
         case .unfolding:
-            if frameInstalled, renderActive {
+            if frameInstalled, renderActive, !awaitingFirstOpeningSample {
                 output?.update(next)
                 overlayVisible = true
             }
@@ -447,6 +512,8 @@ public final class FoldLifecycleCoordinator {
         captureTask?.cancel()
         captureTask = nil
         frameInstalled = false
+        awaitingFirstOpeningSample = false
+        firstOpeningSampleDeadline = nil
         captureActivity = .idle
         usesFallbackReveal = false
         if clearOutput { output?.clearSource() }

@@ -113,6 +113,53 @@ struct FoldLifecycleCoordinatorTests {
         #expect(output.states.last?.progress == 1)
     }
 
+    @Test func freshUnlockWaitsForFirstSensorPoseBeforeShowingFold() async throws {
+        let capture = FakeCapture(frame: try makeFrame())
+        let output = FakeOutput()
+        let coordinator = makeCoordinator(capture: capture, output: output)
+
+        coordinator.sessionLocked()
+        #expect(await coordinator.sessionUnlocked(now: { 10 }).phase == .unfolding)
+        #expect(output.sourceCount == 1)
+        #expect(!coordinator.overlayVisible)
+
+        _ = coordinator.tick(now: 10.05)
+        #expect(!coordinator.overlayVisible)
+        let aligned = coordinator.ingest(.init(degrees: 60, timestamp: 10.06))
+        #expect(aligned.phase == .unfolding)
+        #expect(aligned.progress < 0.5)
+        #expect(coordinator.overlayVisible)
+        #expect(output.states.last?.progress == aligned.progress)
+    }
+
+    @Test func alreadyOpenFirstReadingSkipsLatePostUnlockFold() async throws {
+        let capture = FakeCapture(frame: try makeFrame())
+        let output = FakeOutput()
+        let coordinator = makeCoordinator(capture: capture, output: output)
+
+        coordinator.sessionLocked()
+        _ = await coordinator.sessionUnlocked(now: { 20 })
+        let state = coordinator.ingest(.init(degrees: 100, timestamp: 20.02))
+        await coordinator.waitForPendingCapture()
+        #expect(state.phase == .idle)
+        #expect(!coordinator.overlayVisible)
+        #expect(!coordinator.diagnostics.requiresScriptedUnfold)
+        #expect(output.sourceCount == 1)
+    }
+
+    @Test func missingFirstSensorReadingDoesNotLeaveUnlockHiddenForever() async throws {
+        let capture = FakeCapture(frame: try makeFrame())
+        let output = FakeOutput()
+        let coordinator = makeCoordinator(capture: capture, output: output)
+
+        coordinator.sessionLocked()
+        _ = await coordinator.sessionUnlocked(now: { 30 })
+        #expect(!coordinator.overlayVisible)
+        _ = coordinator.tick(now: 30.13)
+        #expect(coordinator.overlayVisible)
+        #expect(output.states.last?.phase == .unfolding)
+    }
+
     @Test func unlockWithoutBuiltInDisplayStillResetsAnyCapture() async throws {
         let capture = FakeCapture(frame: try makeFrame())
         let output = FakeOutput()
@@ -151,10 +198,11 @@ struct FoldLifecycleCoordinatorTests {
         #expect(output.hideCount >= 2)
     }
 
-    @Test func scriptedUnfoldSuppressesHIDUntilFullDurationThenAcceptsNextClose() async throws {
+    @Test func timedFallbackUnfoldSuppressesInputUntilFullDurationThenAcceptsNextClose() async throws {
         let capture = FakeCapture(frame: try makeFrame())
         let output = FakeOutput()
         let coordinator = makeCoordinator(capture: capture, output: output)
+        coordinator.setInputAvailability(.timedFallback)
 
         coordinator.sessionLocked()
         let unlocked = await coordinator.sessionUnlocked(now: {
@@ -172,6 +220,29 @@ struct FoldLifecycleCoordinatorTests {
         #expect(!coordinator.diagnostics.requiresScriptedUnfold)
 
         driveToArmed(coordinator, startingAt: 31)
+        await coordinator.waitForPendingCapture()
+        #expect(coordinator.state.phase == .armed)
+    }
+
+    @Test func sensorUnfoldWaitsForPhysicalOpeningThenAcceptsNextClose() async throws {
+        let capture = FakeCapture(frame: try makeFrame())
+        let output = FakeOutput()
+        let coordinator = makeCoordinator(capture: capture, output: output)
+
+        coordinator.sessionLocked()
+        #expect(await coordinator.sessionUnlocked(now: { 30 }).phase == .unfolding)
+        coordinator.ingest(.init(degrees: 40, timestamp: 30.2))
+        let held = coordinator.tick(now: 30.621)
+        #expect(held.phase == .unfolding)
+        #expect(held.progress > 0.5)
+        #expect(coordinator.diagnostics.requiresScriptedUnfold)
+
+        coordinator.ingest(.init(degrees: 100, timestamp: 30.9))
+        #expect(coordinator.tick(now: 30.9).phase == .unfolding)
+        #expect(coordinator.tick(now: 31.3).phase == .idle)
+        #expect(!coordinator.diagnostics.requiresScriptedUnfold)
+
+        driveToArmed(coordinator, startingAt: 31.4)
         await coordinator.waitForPendingCapture()
         #expect(coordinator.state.phase == .armed)
     }
@@ -433,7 +504,7 @@ struct FoldLifecycleCoordinatorTests {
             }
             await coordinator.waitForPendingCapture()
 
-            #expect(coordinator.state.phase == expectedDriver.state.phase)
+            #expect(coordinator.state.phase == expectedDriver.state.phase, "\(trace.name) terminal phase")
             #expect(await capture.freezeCount <= capture.warmCount)
             #expect(await capture.warmCount <= 2, "\(trace.name) opened extra capture cycles")
             if coordinator.state.phase == .idle {
