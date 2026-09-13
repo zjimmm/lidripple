@@ -167,6 +167,32 @@ private func sweepTrackingPeak(
     #expect(driver.tick(now: 10.2) == .idle)
 }
 
+@Test func invalidInputAndDisplayTimesCannotInterruptOrPoisonAnUnfold() {
+    let reference = FoldDriver()
+    let noisy = FoldDriver()
+    for driver in [reference, noisy] { driver.beginScriptedUnfold(now: 10) }
+    noisy.ingest(.init(degrees: .nan, timestamp: 10.1))
+    noisy.ingest(.init(degrees: 40, timestamp: .infinity))
+    noisy.tick(now: .nan)
+    noisy.tick(now: .infinity)
+    #expect(noisy.tick(now: 10.31) == reference.tick(now: 10.31))
+    #expect(noisy.tick(now: 10.7) == reference.tick(now: 10.7))
+}
+
+@Test func rejectedInputCannotChangeTheNextValidCloseFrame() {
+    let reference = FoldDriver()
+    let noisy = FoldDriver()
+    for index in 0..<60 {
+        let time = Double(index) / 60
+        let sample = AngleSample(degrees: 120 - Double(index) * 1.5, timestamp: time)
+        #expect(noisy.ingest(sample) == reference.ingest(sample))
+        noisy.ingest(.init(degrees: 0, timestamp: time))
+        noisy.ingest(.init(degrees: 0, timestamp: time - 1))
+        noisy.ingest(.init(degrees: .nan, timestamp: time + 0.001))
+        #expect(noisy.tick(now: time + 0.008) == reference.tick(now: time + 0.008))
+    }
+}
+
 @Test func slowPhysicalOpeningHoldsRevealUntilLidIsOpen() {
     let driver = FoldDriver()
     driver.signalSleep()

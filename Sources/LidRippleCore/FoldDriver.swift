@@ -12,6 +12,7 @@ public final class FoldDriver {
 
     private var phase: FoldPhase = .idle
     private var lastTimestamp: TimeInterval?
+    private var lastInputTimestamp: TimeInterval?
 
     /// Direction gate: tracks how long motion has been consistently one way
     /// and how far it has travelled. Both must clear before a direction
@@ -43,6 +44,12 @@ public final class FoldDriver {
 
     @discardableResult
     public func ingest(_ sample: AngleSample) -> FoldState {
+        // Validate before interrupting a reveal or touching the filter. The
+        // input clock is separate from display ticks, which may arrive first.
+        guard sample.degrees.isFinite, sample.timestamp.isFinite,
+              lastInputTimestamp.map({ sample.timestamp > $0 }) ?? true
+        else { return state }
+        lastInputTimestamp = sample.timestamp
         if scriptedUnfoldStart != nil {
             // A real angle sample arrived while a scripted (angle-free) unfold
             // was in progress. `publish()` has no awareness of the scripted
@@ -90,6 +97,7 @@ public final class FoldDriver {
         spring.reset(to: 0)
         filter = AngleFilter(tuning: tuning)
         lastTimestamp = nil
+        lastInputTimestamp = nil
         clearGate()
         scriptedUnfoldStart = nil
         scriptedStartProgress = 1
@@ -205,6 +213,7 @@ public final class FoldDriver {
     /// Advances the spring or post-unlock reveal at display cadence.
     @discardableResult
     public func tick(now: TimeInterval) -> FoldState {
+        guard now.isFinite else { return state }
         let dt = lastTimestamp.map { max(now - $0, 0) } ?? 0
         lastTimestamp = max(lastTimestamp ?? now, now)
         guard dt > 0 else { return state }
@@ -306,7 +315,8 @@ public final class FoldDriver {
     @discardableResult
     public func alignScriptedOpening(_ sample: AngleSample) -> FoldState {
         guard scriptedUnfoldStart != nil,
-              sample.degrees.isFinite, sample.timestamp.isFinite
+              sample.degrees.isFinite, sample.timestamp.isFinite,
+              sample.timestamp >= (lastScriptedOpeningSampleTimestamp ?? -.infinity)
         else { return state }
         trackScriptedOpening(sample)
         guard let floor = scriptedOpeningFloor else { return state }

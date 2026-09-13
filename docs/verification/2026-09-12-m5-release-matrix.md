@@ -6,6 +6,26 @@ Version candidate: 1.0.0
 
 Status: **not shipped**
 
+Owner visual approval, 2026-09-13: the project owner accepted the current running
+animation from commit `a31b565` ("the current visual is ok with me"). The reported
+closing lag was subsequently confirmed resolved. This records acceptance of the
+current effect and closes the present visual-tuning iteration. The separate
+frame-matched comparison artifact and its provenance remain pending.
+
+Candidate regression at `a31b565`: a clean temporary Swift build passed all 287
+tests on the development M4 Mac. The universal development-signed app was built
+and launched successfully. This is development evidence; final-release signing,
+notarization, fresh-profile checks, and CI remain separate gates below.
+
+Merge-review regression, 2026-09-13: after guarding invalid and reordered sensor
+input, a clean temporary build passed 290 tests with warnings treated as errors.
+Existing opt-in probes on Apple M4 at 3456×2234 measured steady GPU median
+0.775 ms / p95 0.986 ms; first-ten-frame maximum GPU time was 5.646 ms and
+maximum submit-to-complete time 7.273 ms against the 16.667 ms frame budget.
+Source preparation took 5.800 ms. The coordinator scheduling proxy measured
+2.479 ms p95. These measurements cover local CPU/GPU work, not physical
+lid-to-display latency or a baseline on another Mac.
+
 This matrix separates automated evidence from physical, credentialed, and subjective
 acceptance. Unchecked rows are release blockers when they map to the M5 definition of
 done. Do not infer a pass from implementation or simulation alone. Never paste captured

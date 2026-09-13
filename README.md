@@ -15,8 +15,9 @@ ScreenCaptureKit freeze frame, and Metal renderer; a sensor-less close animation
 currently available.
 
 After unlock, a sensor-equipped Mac holds the fresh-frame opening reveal to the
-measured lid angle and smooths its whole-degree steps, with a 620 ms minimum and a
-bounded timeout if readings stall.
+measured lid angle and smooths its whole-degree steps, with a 620 ms reveal curve and a
+bounded timeout if readings stall. The first fresh angle places the reveal at the
+current lid pose; if the lid is already fully open, the late reveal is skipped.
 Sensor-less Macs use the timed reveal. The app cannot show the part of an opening
 that happens before macOS unlocks the desktop.
 
@@ -117,7 +118,7 @@ reveal after unlock.
 See the [design specification](docs/superpowers/specs/2026-09-12-lidripple-design.md)
 and [sensor evidence](docs/sensor.md) for the full contracts and known hardware caveats.
 M3 lifecycle evidence is recorded in the
-[integration matrix](docs/verification/2026-09-12-m3-manual-matrix.md). The
+[integration matrix](docs/verification/2026-09-12-m3-manual-matrix.md).
 The [M4 fidelity report](docs/fidelity/report.json) records measurements from before
 the 2026-09-13 retained-content renderer revision; it must be rerun for this candidate.
 The comparison artifact remains a release gate until it is lawful to publish and accepted.
