@@ -52,6 +52,24 @@ to overwrite that cask. The fixture is not Developer ID signed or notarized.
 `brew style --cask` refused the `/private/tmp` file because Homebrew requires casks
 to reside in a tap; style/audit/install remain unchecked release gates.
 
+Clean candidate checkout, 2026-09-13, detached commit `0876664` on an Apple M4 Mac:
+`swift test -Xswiftc -warnings-as-errors` passed 269/269; `swift build -c release
+-Xswiftc -warnings-as-errors` passed. `scripts/build-app.sh --adhoc-sign --output
+dist` produced a universal `x86_64 arm64` app and passed strict ad-hoc signature
+verification. `scripts/make-dmg.sh` produced a **test-only**, ad-hoc DMG and checksum;
+`hdiutil verify` and `shasum -a 256 -c` passed. The detached checkout was clean
+before these commands. This does not prove a clean, synchronized `main` release build,
+Developer ID signing, notarization, Gatekeeper, or cask installation.
+
+Opt-in candidate performance probes at `0876664` on Apple M4: with
+`LIDRIPPLE_FIDELITY_BENCHMARK=1`, the first ten native-resolution GPU frames had
+2.727 ms maximum GPU time and 5.445 ms maximum submit-to-complete time against
+16.667 ms; the coordinator-only S2 proxy had 0.015 ms p95 over 30 samples, and
+the first ten lifecycle ticks had 0.001 ms maximum. With
+`LIDRIPPLE_RENDER_BENCHMARK=1`, steady-state native-resolution render time had
+0.529 ms median and 0.737 ms p95. These are this M4's development measurements,
+not an M1 Pro baseline or physical end-to-end S2/S3 proof.
+
 ## M4 / S6 fidelity prerequisite
 
 - [ ] `docs/fidelity/duo-comparison.gif` exists above the README fold

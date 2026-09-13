@@ -63,6 +63,14 @@ if [[ "$release_build" -eq 1 ]]; then
         echo "Release bundles require a clean checkout" >&2
         exit 1
     }
+    if ! remote_main="$(GIT_TERMINAL_PROMPT=0 git ls-remote --exit-code origin refs/heads/main | awk 'NR == 1 { print $1 }')"; then
+        echo "Cannot verify the current origin/main; release builds require a reachable remote" >&2
+        exit 1
+    fi
+    [[ -n "$remote_main" && "$(git rev-parse HEAD)" == "$remote_main" ]] || {
+        echo "Release bundles require main to match the current origin/main" >&2
+        exit 1
+    }
 fi
 
 output_dir="${output_dir:-$repo_root/dist}"

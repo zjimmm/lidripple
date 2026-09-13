@@ -58,6 +58,9 @@ uploading the asset. A different byte sequence is a different release candidate.
    scripts/build-app.sh --release --output dist
    ```
 
+   `build-app.sh --release` queries the current `origin/main` and refuses to
+   assemble a release bundle if `HEAD` differs or the remote cannot be reached.
+
 4. Sign and notarize. Use the exact identity printed by `security find-identity -v -p
    codesigning`:
 
