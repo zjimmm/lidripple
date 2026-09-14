@@ -54,7 +54,7 @@ public final class NativeScreenRecordingOnboardingPresenter:
         let alert = NSAlert()
         alert.messageText = "Allow Screen Recording for the fold effect?"
         alert.informativeText = """
-        lidripple briefly captures only the built-in display and excludes its own \
+        LidRipple briefly captures only the built-in display and excludes its own \
         overlay. It keeps one frame in GPU memory, writes nothing to disk, and sends \
         nothing over the network. It does not need Accessibility or Input Monitoring.
         """

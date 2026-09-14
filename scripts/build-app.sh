@@ -6,7 +6,7 @@ usage() {
 Usage: scripts/build-app.sh [--release] [--adhoc-sign | --sign-identity ID] [--output DIR]
 
 Builds arm64 and x86_64 release executables, combines them into a universal
-lidripple.app, and optionally signs it. --sign-identity accepts a local code-signing
+LidRipple.app, and optionally signs it. --sign-identity accepts a local code-signing
 identity for development builds; unlike --adhoc-sign, it keeps a stable macOS
 Screen Recording permission identity across rebuilds. --release requires a clean
 main checkout. Developer ID signing is performed by sign-and-notarize.sh.
@@ -86,7 +86,7 @@ if [[ "$release_build" -eq 1 ]]; then
 fi
 
 output_dir="${output_dir:-$repo_root/dist}"
-app="$output_dir/lidripple.app"
+app="$output_dir/LidRipple.app"
 [[ ! -e "$app" && ! -L "$app" ]] || {
     echo "Refusing to overwrite existing bundle: $app" >&2
     exit 1
@@ -100,7 +100,7 @@ mkdir -p "$output_dir"
 bundle_stage="$(mktemp -d "$output_dir/.lidripple-app.XXXXXX")"
 cleanup() { rm -rf "$bundle_stage"; }
 trap cleanup EXIT
-staged_app="$bundle_stage/lidripple.app"
+staged_app="$bundle_stage/LidRipple.app"
 mkdir -p "$staged_app/Contents/MacOS" "$staged_app/Contents/Resources"
 
 for arch in arm64 x86_64; do

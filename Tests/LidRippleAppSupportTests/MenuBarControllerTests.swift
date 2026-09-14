@@ -6,6 +6,13 @@ import LidRippleCore
 @Suite(.serialized)
 @MainActor
 struct MenuBarControllerTests {
+    @Test func statusIconUsesNativeTemplateTintAndCompactSize() {
+        let icon = StatusBarIcon.make()
+        #expect(icon.isTemplate)
+        #expect(icon.size == NSSize(width: 18, height: 18))
+        #expect(icon.accessibilityDescription == "LidRipple")
+        #expect(icon.tiffRepresentation != nil)
+    }
     @Test func effectMenuForwardsSelectionAndReflectsSnapshot() throws {
         let recorder = ActionRecorder()
         let controller = makeController(recorder: recorder)
@@ -35,6 +42,8 @@ struct MenuBarControllerTests {
             "lidripple.menu.quit",
         ])
         #expect(item(.debugScrubber, in: controller).keyEquivalent == "d")
+        #expect(item(.enabled, in: controller).title == "Enable LidRipple")
+        #expect(item(.quit, in: controller).title == "Quit LidRipple")
     }
 
     @Test func refreshCoversDisabledFallbackPermissionAndApprovalStates() {

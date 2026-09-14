@@ -132,26 +132,26 @@ xcrun stapler validate "$dmg"
 
 hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount_point" -quiet
 entries="$(find "$mount_point" -mindepth 1 -maxdepth 1 -print | sed "s|$mount_point/||" | LC_ALL=C sort)"
-[[ "$entries" == $'Applications\nlidripple.app' ]] || {
+[[ "$entries" == $'Applications\nLidRipple.app' ]] || {
     echo "DMG contains unexpected top-level files:" >&2
     echo "$entries" >&2
     exit 1
 }
 [[ -L "$mount_point/Applications" &&
    "$(readlink "$mount_point/Applications")" == /Applications &&
-   -d "$mount_point/lidripple.app" && ! -L "$mount_point/lidripple.app" ]] || {
+   -d "$mount_point/LidRipple.app" && ! -L "$mount_point/LidRipple.app" ]] || {
     echo "DMG Applications shortcut or app type is invalid" >&2
     exit 1
 }
-ditto "$mount_point/lidripple.app" "$install_root/lidripple.app"
-codesign --verify --deep --strict "$install_root/lidripple.app"
-diff -qr "$app" "$install_root/lidripple.app" || {
+ditto "$mount_point/LidRipple.app" "$install_root/LidRipple.app"
+codesign --verify --deep --strict "$install_root/LidRipple.app"
+diff -qr "$app" "$install_root/LidRipple.app" || {
     echo "Mounted DMG app differs from the verified app" >&2
     exit 1
 }
 
 if [[ "$launch_smoke" -eq 1 ]]; then
-    "$install_root/lidripple.app/Contents/MacOS/lidripple" >/dev/null 2>&1 &
+    "$install_root/LidRipple.app/Contents/MacOS/lidripple" >/dev/null 2>&1 &
     smoke_pid=$!
     sleep 2
     kill "$smoke_pid" >/dev/null 2>&1 || {

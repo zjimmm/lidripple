@@ -18,7 +18,7 @@ final class EffectPreviewController: NSObject, NSWindowDelegate {
         }
         let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 480, height: 380),
             styleMask: [.titled, .closable], backing: .buffered, defer: false)
-        panel.title = "lidripple · Preview"
+        panel.title = "LidRipple · Preview"
         panel.isReleasedWhenClosed = false
         panel.delegate = self
         let view = MacBookPreviewView(frame: NSRect(x: 0, y: 68, width: 480, height: 300))

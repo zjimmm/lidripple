@@ -117,8 +117,8 @@ public final class MenuBarController: NSObject {
 
         if installStatusItem {
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-            item.button?.title = "◐"
-            item.button?.setAccessibilityLabel("lidripple")
+            item.button?.image = StatusBarIcon.make()
+            item.button?.setAccessibilityLabel("LidRipple")
             item.menu = menu
             statusItem = item
         }
@@ -208,7 +208,7 @@ public final class MenuBarController: NSObject {
         configure(
             enabledItem,
             id: .enabled,
-            title: "Enable lidripple",
+            title: "Enable LidRipple",
             action: #selector(toggleEnabled)
         )
         menu.addItem(enabledItem)
@@ -269,7 +269,7 @@ public final class MenuBarController: NSObject {
         configure(
             quitItem,
             id: .quit,
-            title: "Quit lidripple",
+            title: "Quit LidRipple",
             action: #selector(quit),
             keyEquivalent: "q"
         )
@@ -317,7 +317,7 @@ public final class MenuBarController: NSObject {
 
     @objc private func checkForUpdates() {
         guard actions.checkForUpdates() else {
-            actions.reportError("Unable to open the lidripple Releases page in your browser.")
+            actions.reportError("Unable to open the LidRipple Releases page in your browser.")
             return
         }
     }

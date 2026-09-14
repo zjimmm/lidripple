@@ -59,7 +59,7 @@ jobs:
         shell: bash
         run: |
           scripts/build-app.sh --adhoc-sign --output "$RUNNER_TEMP/lidripple-dist"
-          app="$RUNNER_TEMP/lidripple-dist/lidripple.app"
+          app="$RUNNER_TEMP/lidripple-dist/LidRipple.app"
           test "$(lipo -archs "$app/Contents/MacOS/lidripple")" = "x86_64 arm64" || \
             test "$(lipo -archs "$app/Contents/MacOS/lidripple")" = "arm64 x86_64"
           codesign --verify --deep --strict --verbose=2 "$app"
@@ -77,7 +77,7 @@ jobs:
           artifact_dir="$RUNNER_TEMP/lidripple-artifact"
           mkdir -p "$artifact_dir"
           dmg="$artifact_dir/lidripple-$version.dmg"
-          scripts/make-dmg.sh "$RUNNER_TEMP/lidripple-dist/lidripple.app" "$dmg"
+          scripts/make-dmg.sh "$RUNNER_TEMP/lidripple-dist/LidRipple.app" "$dmg"
           (cd "$artifact_dir" && shasum -a 256 -c "lidripple-$version.dmg.sha256")
           hdiutil verify "$dmg"
           mount_point="$(mktemp -d "$RUNNER_TEMP/lidripple-mount.XXXXXX")"
@@ -85,8 +85,8 @@ jobs:
           trap 'hdiutil detach "$mount_point" -quiet' EXIT
           test -L "$mount_point/Applications"
           test "$(readlink "$mount_point/Applications")" = /Applications
-          test -d "$mount_point/lidripple.app"
-          diff -qr "$RUNNER_TEMP/lidripple-dist/lidripple.app" "$mount_point/lidripple.app"
+          test -d "$mount_point/LidRipple.app"
+          diff -qr "$RUNNER_TEMP/lidripple-dist/LidRipple.app" "$mount_point/LidRipple.app"
           hdiutil detach "$mount_point" -quiet
           trap - EXIT
           scripts/write-cask.sh --dmg "$dmg" --output "$artifact_dir/lidripple.rb"
@@ -97,7 +97,7 @@ jobs:
           bad_dmg="$bad_dir/lidripple-$version.dmg"
           digest="$(shasum -a 256 "$bad_dmg" | awk '{ print $1 }')"
           printf '%s  wrong-name.dmg\n' "$digest" > "$bad_dmg.sha256"
-          if scripts/verify-release.sh --app "$RUNNER_TEMP/lidripple-dist/lidripple.app" \
+          if scripts/verify-release.sh --app "$RUNNER_TEMP/lidripple-dist/LidRipple.app" \
               --dmg "$bad_dmg" --skip-launch-smoke > "$bad_dir/verifier.log" 2>&1; then
             echo "Verifier accepted a mislabeled sidecar" >&2
             exit 1

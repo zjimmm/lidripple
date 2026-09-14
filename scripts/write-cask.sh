@@ -59,16 +59,16 @@ cask "lidripple" do
   sha256 "$actual"
 
   url "https://github.com/zjimmm/lidripple/releases/download/v#{version}/lidripple-#{version}.dmg"
-  name "lidripple"
+  name "LidRipple"
   desc "Menu bar fold animation for the built-in MacBook display"
   homepage "https://github.com/zjimmm/lidripple"
 
   depends_on macos: :sonoma
 
-  app "lidripple.app"
+  app "LidRipple.app"
 
   uninstall quit: "com.lidripple.app",
-            login_item: "lidripple"
+            login_item: "LidRipple"
 
   zap trash: "~/Library/Preferences/com.lidripple.app.plist"
 end

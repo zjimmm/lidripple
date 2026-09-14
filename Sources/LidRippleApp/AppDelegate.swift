@@ -74,8 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             item = unavailableStatusItem
         } else {
             item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-            item.button?.title = "◐"
-            item.button?.setAccessibilityLabel("lidripple unavailable")
+            item.button?.image = StatusBarIcon.make()
+            item.button?.setAccessibilityLabel("LidRipple unavailable")
             unavailableStatusItem = item
         }
         let reasonText: String
@@ -87,10 +87,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case nil:
             reasonText = "Unable to start: \(reason.localizedDescription)"
         }
-        item.button?.toolTip = "lidripple: \(reasonText)"
+        item.button?.toolTip = "LidRipple: \(reasonText)"
 
         let menu = NSMenu()
-        let status = NSMenuItem(title: "lidripple unavailable", action: nil, keyEquivalent: "")
+        let status = NSMenuItem(title: "LidRipple unavailable", action: nil, keyEquivalent: "")
         status.isEnabled = false
         menu.addItem(status)
         let detail = NSMenuItem(title: reasonText, action: nil, keyEquivalent: "")
@@ -100,7 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let retry = NSMenuItem(title: "Retry", action: #selector(retryStartup), keyEquivalent: "r")
         retry.target = self
         menu.addItem(retry)
-        let quit = NSMenuItem(title: "Quit lidripple", action: #selector(quit), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quit LidRipple", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
         item.menu = menu
@@ -264,7 +264,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func presentError(_ message: String) {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "lidripple"
+        alert.messageText = "LidRipple"
         alert.informativeText = message
         alert.addButton(withTitle: "OK")
         alert.runModal()

@@ -25,10 +25,10 @@ stage="$(mktemp -d "${TMPDIR:-/tmp}/lidripple-dmg.XXXXXX")"
 cleanup() { rm -rf "$stage"; }
 trap cleanup EXIT
 
-ditto "$app" "$stage/lidripple.app"
+ditto "$app" "$stage/LidRipple.app"
 ln -s /Applications "$stage/Applications"
 hdiutil create \
-    -volname "lidripple" \
+    -volname "LidRipple" \
     -srcfolder "$stage" \
     -format UDZO \
     "$output"

@@ -235,7 +235,7 @@ public final class DebugScrubberController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        panel.title = "lidripple · Effect Preview"
+        panel.title = "LidRipple · Effect Preview"
         // The preview overlay sits at shielding level. Controls must remain
         // visible and escapable above it even at the fully sealed endpoint.
         panel.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()) + 1)

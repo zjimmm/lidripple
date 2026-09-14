@@ -106,8 +106,8 @@ submit_and_require_accepted() {
     }
 }
 
-ditto -c -k --keepParent "$app" "$notary_stage/lidripple.app.zip"
-submit_and_require_accepted "$notary_stage/lidripple.app.zip"
+ditto -c -k --keepParent "$app" "$notary_stage/LidRipple.app.zip"
+submit_and_require_accepted "$notary_stage/LidRipple.app.zip"
 xcrun stapler staple "$app"
 xcrun stapler validate "$app"
 

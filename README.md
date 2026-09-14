@@ -1,4 +1,4 @@
-# lidripple
+# LidRipple
 
 > **Pre-release status:** implementation is in progress. The frame-matched M4 Duo
 > comparison GIF, notarized v1.0.0 artifact, Homebrew cask, and v1 sensor-less
@@ -111,14 +111,14 @@ There is no published release yet. When the v1.0.0 gates pass, installation will
 
 1. Download the notarized `lidripple-1.0.0.dmg` and its SHA-256 file from the matching
    GitHub Release.
-2. Verify the checksum, open the DMG, and drag `lidripple.app` to Applications.
+2. Verify the checksum, open the DMG, and drag `LidRipple.app` to Applications.
 3. Launch the app and follow its Screen Recording explanation.
 
 A Homebrew cask will be added only after it can name that exact immutable DMG and exact
 SHA-256; this project never uses `sha256 :no_check`.
 
 To uninstall, turn off Launch at Login in lidripple, quit it, and move
-`/Applications/lidripple.app` to Trash. Remove the app's preferences only if you also
+`/Applications/LidRipple.app` to Trash. Remove the app's preferences only if you also
 want to reset onboarding and controls:
 
 ```sh
