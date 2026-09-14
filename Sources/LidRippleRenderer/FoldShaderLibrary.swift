@@ -99,6 +99,10 @@ enum FoldShaderLibrary {
         );
         output.textureCoordinate = input.textureCoordinate;
         output.panelV = panelV;
+        if (uniforms.quality.w > 0.0f) {
+            // Liquid covers the entire desktop: no shrinking panel or duplicate backing.
+            output.position = float4(input.position, 0.0f, 1.0f);
+        }
         return output;
     }
 
@@ -114,6 +118,33 @@ enum FoldShaderLibrary {
         const float blurExponent = uniforms.cameraAndBlur.w;
         const float sourceHeight = uniforms.dimensions.w;
         const float panelV = input.panelV;
+
+        if (uniforms.quality.w > 0.0f) {
+            const float p = clamp(progress, 0.0f, 1.0f);
+            const float2 uv = input.textureCoordinate;
+            const float aspect = uniforms.dimensions.x / uniforms.dimensions.y;
+            const float2 fromHinge = float2((uv.x - 0.5f) * aspect, (1.0f - uv.y) + 0.12f);
+            const float distance = length(fromHinge);
+            // Progress is the wave clock: a stationary lid holds its surface,
+            // and reversing the lid reverses the wave without a time reset.
+            const float phase = distance * 22.0f - p * 16.0f;
+            const float envelope = sin(p * M_PI_F) * uniforms.quality.w;
+            const float edge = smoothstep(0.0f, 0.08f, uv.x)
+                * smoothstep(0.0f, 0.08f, 1.0f - uv.x)
+                * smoothstep(0.0f, 0.08f, uv.y)
+                * smoothstep(0.0f, 0.08f, 1.0f - uv.y);
+            const float amplitude = 0.024f * envelope * edge * exp(-distance * 0.45f);
+            const float2 direction = normalize(fromHinge);
+            const float2 displacement = float2(direction.x / aspect, -direction.y)
+                * sin(phase) * amplitude;
+            const float2 refracted = clamp(uv + displacement, float2(0.0f), float2(1.0f));
+            float3 liquid = source.sample(sourceSampler, refracted, level(0.0f)).rgb;
+            const float crest = cos(phase) * envelope * edge;
+            liquid *= 1.0f + crest * 0.075f;
+            liquid += pow(max(crest, 0.0f), 8.0f) * float3(0.018f, 0.035f, 0.045f);
+            const float seal = smoothstep(uniforms.quality.z, 1.0f, p);
+            return float4(clamp(mix(liquid, uniforms.colorAndTap.xyz, seal), 0.0f, 1.0f), 1.0f);
+        }
 
         const float radius = pow(progress, blurExponent)
             * (0.15f + 1.85f * pow(panelV, 1.4f)) * maxBlur;

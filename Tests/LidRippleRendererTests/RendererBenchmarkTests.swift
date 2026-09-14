@@ -1,9 +1,10 @@
 import Foundation
 import Metal
 import Testing
+import LidRippleCore
 @testable import LidRippleRenderer
 
-@Test func nativeResolutionRenderBenchmark() throws {
+@Test(arguments: DesktopEffect.allCases) func nativeResolutionRenderBenchmark(effect: DesktopEffect) throws {
     guard ProcessInfo.processInfo.environment["LIDRIPPLE_RENDER_BENCHMARK"] == "1" else {
         return
     }
@@ -13,6 +14,7 @@ import Testing
     let device = try #require(MTLCreateSystemDefaultDevice())
     let commandQueue = try #require(device.makeCommandQueue())
     let renderer = try FoldRenderer(device: device)
+    renderer.setEffect(effect)
     let source = try SyntheticFrame.makeCheckerboardGradientTexture(
         device: device,
         width: width,
@@ -52,7 +54,8 @@ import Testing
     let p95 = samples[Int(Double(samples.count - 1) * 0.95)]
     let isM1ProBaseline = device.name.localizedCaseInsensitiveContains("M1 Pro")
     print(String(
-        format: "RENDER_BENCHMARK device=%@ resolution=%dx%d median_ms=%.3f p95_ms=%.3f baseline=%@",
+        format: "RENDER_BENCHMARK effect=%@ device=%@ resolution=%dx%d median_ms=%.3f p95_ms=%.3f baseline=%@",
+        effect.rawValue,
         device.name,
         width,
         height,

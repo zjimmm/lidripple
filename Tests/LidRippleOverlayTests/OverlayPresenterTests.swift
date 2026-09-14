@@ -8,6 +8,50 @@ import LidRippleRenderer
 @testable import LidRippleOverlay
 
 extension OverlayAppKitTests {
+@Test func frostHandoffKeepsMeasuredGeometryAndClearsOnAbort() {
+    guard let screen = NSScreen.main else { return }
+    let presentation = FakePresentation()
+    let presenter = OverlayPresenter(screen: screen, presentation: presentation)
+    presenter.beginWakeCover()
+    #expect(presenter.isWakeCoverActiveForTesting)
+    #expect(presentation.view.isHidden)
+    presenter.update(FoldState(phase: .unfolding, progress: 0.7, velocity: -1))
+    #expect(presentation.states.last?.progress == 0.7)
+    #expect(!presentation.view.isHidden)
+    #expect(presenter.isWakeCoverActiveForTesting)
+    presenter.abort()
+    #expect(!presenter.isWakeCoverActiveForTesting)
+    #expect(!presenter.windowForTesting.isVisible)
+    #expect(OverlayPresenter.wakeCoverOpacity(elapsed: 0) == 1)
+    #expect(abs(OverlayPresenter.wakeCoverOpacity(elapsed: 0.08) - 0.5) < 0.0001)
+    #expect(OverlayPresenter.wakeCoverOpacity(elapsed: 0.16) == 0)
+}
+
+@Test func frostTimesOutWithoutAFrame() async throws {
+    guard let screen = NSScreen.main else { return }
+    let presenter = OverlayPresenter(screen: screen, presentation: FakePresentation())
+    presenter.beginWakeCover()
+    try await Task.sleep(for: .milliseconds(650))
+    #expect(!presenter.isWakeCoverActiveForTesting)
+    #expect(!presenter.windowForTesting.isVisible)
+}
+
+@Test func openingFramesReachRendererAtFullMeasuredDepthForBothEffects() {
+    guard let screen = NSScreen.main else { return }
+    let presentation = FakePresentation()
+    let presenter = OverlayPresenter(screen: screen, presentation: presentation)
+    for effect in DesktopEffect.allCases {
+        presenter.setEffect(effect)
+        for p in [0.8, 0.7, 0.6, 0.4, 0.2, 0.0] {
+            presenter.update(FoldState(phase: .unfolding, progress: p, velocity: -1))
+            #expect(presentation.states.last?.progress == p)
+        }
+        presenter.clearSource()
+        presenter.update(FoldState(phase: .folding, progress: 0.8, velocity: 1))
+        #expect(presentation.states.last?.progress == 0.8)
+    }
+}
+
 @Test func presenterInitSucceedsOrFailsWithoutCrashing() {
     if let presenter = OverlayPresenter() {
         #expect(presenter.windowID != 0)

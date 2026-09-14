@@ -24,6 +24,8 @@ public protocol FoldLifecycleOutput: AnyObject {
     var captureExclusionWindowID: CGWindowID { get }
 
     func setSource(_ frame: CapturedFrame) throws
+    /// Post-unlock only. Uses no saved capture and must have its own timeout.
+    func beginWakeCover()
     func setFallbackSource() throws
     func clearSource()
     func update(_ state: FoldState)
@@ -39,6 +41,7 @@ public protocol FoldLifecycleOutput: AnyObject {
 }
 
 public extension FoldLifecycleOutput {
+    func beginWakeCover() {}
     /// Compatibility default for non-rendering diagnostic/test outputs.
     func setTuning(_ tuning: FoldTuning) {}
 }

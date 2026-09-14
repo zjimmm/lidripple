@@ -10,6 +10,117 @@ import LidRippleTrace
 @Suite(.serialized)
 @MainActor
 struct FoldLifecycleCoordinatorTests {
+    @Test func frostStartsBeforeCaptureWaitAndLockCancelsIt() async throws {
+        let gate = AsyncGate()
+        let capture = FakeCapture(frame: try makeFrame(), warmGate: gate)
+        let output = FakeOutput()
+        let coordinator = makeCoordinator(capture: capture, output: output)
+        coordinator.sessionLocked()
+        #expect(output.coverCount == 0)
+        let unlock = Task { @MainActor in await coordinator.sessionUnlocked(now: { 10 }) }
+        await gate.waitUntilEntered()
+        #expect(output.coverCount == 1)
+        #expect(output.coverVisible)
+        #expect(output.sourceCount == 0)
+        coordinator.sessionLocked()
+        #expect(!output.coverVisible)
+        await gate.release()
+        _ = await unlock.value
+        #expect(!output.coverVisible)
+        #expect(output.sourceCount == 0)
+    }
+    @Test func foldPolicySkipsSleepRevealWithoutCapturingOrShowingContent() async throws {
+        let capture = FakeCapture(frame: try makeFrame())
+        let output = FakeOutput()
+        let coordinator = makeCoordinator(capture: capture, output: output)
+        coordinator.setWakeRevealEnabled(false)
+        coordinator.systemWillSleep()
+        coordinator.sessionLocked()
+        let state = await coordinator.sessionUnlocked(now: { 10 })
+        #expect(state.phase == .idle)
+        #expect(await capture.freezeCount == 0)
+        #expect(output.sourceCount == 0)
+        #expect(output.states.isEmpty)
+        #expect(!coordinator.overlayVisible)
+        #expect(!coordinator.diagnostics.requiresScriptedUnfold)
+        driveToArmed(coordinator, startingAt: 11)
+        await coordinator.waitForPendingCapture()
+        #expect(coordinator.state.phase == .armed)
+    }
+
+    @Test func ripplePolicyRetainsFreshRevealAfterSleep() async throws {
+        let capture = FakeCapture(frame: try makeFrame())
+        let output = FakeOutput()
+        let coordinator = makeCoordinator(capture: capture, output: output)
+        coordinator.setWakeRevealEnabled(true)
+        coordinator.systemWillSleep()
+        coordinator.sessionLocked()
+        #expect(await coordinator.sessionUnlocked(now: { 10 }).phase == .unfolding)
+        #expect(output.sourceCount == 1)
+    }
+    @Test func missingOpeningPoseSkipsRatherThanInventingAClosedLid() async throws {
+        let capture = FakeCapture(frame: try makeFrame())
+        let output = FakeOutput()
+        let coordinator = makeCoordinator(capture: capture, output: output)
+        coordinator.sessionLocked()
+        _ = await coordinator.sessionUnlocked(now: { 10 })
+        #expect(coordinator.tick(now: 10.13).phase == .idle)
+        #expect(!coordinator.overlayVisible)
+        #expect(output.states.allSatisfy { $0.phase == .idle })
+    }
+    @Test func freshAngleBufferedDuringCaptureAvoidsPostCaptureWait() async throws {
+        let gate = AsyncGate()
+        let capture = FakeCapture(frame: try makeFrame(), warmGate: gate)
+        let output = FakeOutput()
+        let coordinator = makeCoordinator(capture: capture, output: output)
+        coordinator.sessionLocked()
+        let unlock = Task { @MainActor in await coordinator.sessionUnlocked(now: { 10 }) }
+        await gate.waitUntilEntered()
+        coordinator.cacheOpeningSample(.init(degrees: 60, timestamp: 9.98))
+        coordinator.cacheOpeningSample(.init(degrees: 20, timestamp: 9.9))
+        #expect(!coordinator.overlayVisible)
+        #expect(output.states.isEmpty)
+        await gate.release()
+        let state = await unlock.value
+        #expect(state.phase == .unfolding)
+        #expect(state.progress > 0 && state.progress < 0.5)
+        #expect(coordinator.overlayVisible)
+        #expect(output.states.last == state)
+    }
+
+    @Test func staleBufferedAngleDoesNotPositionReveal() async throws {
+        let gate = AsyncGate()
+        let capture = FakeCapture(frame: try makeFrame(), warmGate: gate)
+        let output = FakeOutput()
+        let coordinator = makeCoordinator(capture: capture, output: output)
+        coordinator.sessionLocked()
+        let unlock = Task { @MainActor in await coordinator.sessionUnlocked(now: { 10 }) }
+        await gate.waitUntilEntered()
+        coordinator.cacheOpeningSample(.init(degrees: 60, timestamp: 9))
+        await gate.release()
+        _ = await unlock.value
+        #expect(!coordinator.overlayVisible)
+        #expect(coordinator.state.progress == 1)
+    }
+
+    @Test func delayedFreshCaptureNeverReclosesVisibleDesktop() async throws {
+        let gate = AsyncGate()
+        let capture = FakeCapture(frame: try makeFrame(), warmGate: gate)
+        let output = FakeOutput()
+        let coordinator = makeCoordinator(capture: capture, output: output)
+        coordinator.sessionLocked()
+        var time = 10.0
+        let unlock = Task { @MainActor in await coordinator.sessionUnlocked(now: { time }) }
+        await gate.waitUntilEntered()
+        time = 10.4
+        coordinator.cacheOpeningSample(.init(degrees: 35, timestamp: time))
+        await gate.release()
+        #expect(await unlock.value.phase == .idle)
+        await coordinator.waitForPendingCapture()
+        #expect(!coordinator.overlayVisible)
+        #expect(!coordinator.diagnostics.requiresScriptedUnfold)
+        #expect(output.states.allSatisfy { $0.phase == .idle })
+    }
     @Test func closeWarmFreezeReverseAndReenterUseOneCycleAtATime() async throws {
         let frame = try makeFrame()
         let capture = FakeCapture(frame: frame)
@@ -147,7 +258,7 @@ struct FoldLifecycleCoordinatorTests {
         #expect(output.sourceCount == 1)
     }
 
-    @Test func missingFirstSensorReadingDoesNotLeaveUnlockHiddenForever() async throws {
+    @Test func missingFirstSensorReadingLeavesDesktopVisibleInsteadOfLateReplay() async throws {
         let capture = FakeCapture(frame: try makeFrame())
         let output = FakeOutput()
         let coordinator = makeCoordinator(capture: capture, output: output)
@@ -156,8 +267,9 @@ struct FoldLifecycleCoordinatorTests {
         _ = await coordinator.sessionUnlocked(now: { 30 })
         #expect(!coordinator.overlayVisible)
         _ = coordinator.tick(now: 30.13)
-        #expect(coordinator.overlayVisible)
-        #expect(output.states.last?.phase == .unfolding)
+        #expect(!coordinator.overlayVisible)
+        #expect(output.states.last?.phase == .idle)
+        #expect(!coordinator.diagnostics.requiresScriptedUnfold)
     }
 
     @Test func unlockWithoutBuiltInDisplayStillResetsAnyCapture() async throws {
@@ -206,9 +318,9 @@ struct FoldLifecycleCoordinatorTests {
 
         coordinator.sessionLocked()
         let unlocked = await coordinator.sessionUnlocked(now: {
-            #expect(output.sourceCount == 1)
             return 30
         })
+        #expect(output.sourceCount == 1)
         #expect(unlocked.phase == .unfolding)
 
         coordinator.ingest(.init(degrees: 40, timestamp: 30.2))
@@ -620,6 +732,9 @@ private actor AsyncGate {
 
 @MainActor
 private final class FakeOutput: FoldLifecycleOutput {
+    var coverCount = 0
+    var coverVisible = false
+    func beginWakeCover() { coverCount += 1; coverVisible = true }
     let captureExclusionWindowID: CGWindowID = 42
     var sourceCount = 0
     var fallbackCount = 0
@@ -632,9 +747,9 @@ private final class FakeOutput: FoldLifecycleOutput {
 
     func setSource(_ frame: CapturedFrame) throws { sourceCount += 1 }
     func setFallbackSource() throws { fallbackCount += 1 }
-    func clearSource() { clearCount += 1 }
+    func clearSource() { clearCount += 1; coverVisible = false }
     func update(_ state: FoldState) { states.append(state) }
-    func hide() { hideCount += 1 }
+    func hide() { hideCount += 1; coverVisible = false }
     func setReducedQuality(_ reduced: Bool) { qualityModes.append(reduced) }
     func reconfigureForBuiltInDisplay() -> Bool {
         reconfigureCount += 1

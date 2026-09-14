@@ -7,10 +7,17 @@ import LidRippleCore
 /// in-memory synthetic source.
 @MainActor
 public protocol DebugScrubberSession: AnyObject {
+    var previewEffect: DesktopEffect { get }
+    func selectPreviewEffect(_ effect: DesktopEffect)
     func prepareDebugSession(intensity: Double) async throws
     func updateDebugProgress(_ progress: Double, direction: Double)
     func updateDebugIntensity(_ intensity: Double)
     func finishDebugSession() async
+}
+
+public extension DebugScrubberSession {
+    var previewEffect: DesktopEffect { .fold }
+    func selectPreviewEffect(_ effect: DesktopEffect) {}
 }
 
 @MainActor
@@ -34,24 +41,19 @@ public final class RunLoopDebugPlaybackScheduler: DebugPlaybackScheduling {
         interval: TimeInterval,
         action: @escaping @MainActor () -> Void
     ) -> any DebugPlaybackCancellation {
-        let token = TimerCancellation()
-        let timer = Timer(timeInterval: interval, repeats: true) { _ in
-            MainActor.assumeIsolated { action() }
-        }
-        token.timer = timer
-        RunLoop.main.add(timer, forMode: .common)
-        return token
+        // Use the same display-synchronized clock as physical lid playback.
+        // A free-running Timer drifts against drawable presentation deadlines.
+        PreviewClockCancellation(RunLoopAppAnimationScheduler().schedule(
+            interval: interval, action: action
+        ))
     }
 }
 
 @MainActor
-private final class TimerCancellation: DebugPlaybackCancellation {
-    var timer: Timer?
-
-    func cancel() {
-        timer?.invalidate()
-        timer = nil
-    }
+private final class PreviewClockCancellation: DebugPlaybackCancellation {
+    private let clock: any AppAnimationCancellation
+    init(_ clock: any AppAnimationCancellation) { self.clock = clock }
+    func cancel() { clock.cancel() }
 }
 
 @MainActor
@@ -74,6 +76,9 @@ public final class DebugScrubberController: NSObject, NSWindowDelegate {
     private var progressLabel: NSTextField?
     private var playback: (any DebugPlaybackCancellation)?
     private var lastTick = 0.0
+    private var playbackStart = 0.0
+    private var playbackElapsed = 0.0
+    private var playbackSpan = 1.0
     private var isOpening = false
     private var generation: UInt64 = 0
 
@@ -109,7 +114,7 @@ public final class DebugScrubberController: NSObject, NSWindowDelegate {
         } catch {
             guard generation == cycle else { return }
             isOpening = false
-            reportError("Unable to open the debug scrubber: \(error)")
+            reportError("Unable to preview the effect: \(error)")
             return
         }
 
@@ -147,7 +152,7 @@ public final class DebugScrubberController: NSObject, NSWindowDelegate {
     }
 
     public func setProgress(_ value: Double) {
-        guard isOpen else { return }
+        guard isOpen, value.isFinite else { return }
         stopPlayback()
         let clamped = min(max(value, 0), maximumProgress)
         direction = clamped >= progress ? 1 : -1
@@ -173,13 +178,14 @@ public final class DebugScrubberController: NSObject, NSWindowDelegate {
 
     /// Deterministic tick seam used by the injected scheduler in tests.
     public func tick(now currentTime: TimeInterval) {
-        guard isOpen, isPlaying else { return }
+        guard isOpen, isPlaying, currentTime.isFinite, currentTime > lastTick else { return }
         let delta = min(max(currentTime - lastTick, 0), 1.0 / 15.0)
         lastTick = currentTime
-        progress = min(
-            max(progress + direction * delta * maximumProgress / playbackDuration, 0),
-            maximumProgress
-        )
+        playbackElapsed += delta
+        let t = min(playbackElapsed / playbackSpan, 1)
+        let eased = t * t * (3 - 2 * t)
+        let target = direction > 0 ? maximumProgress : 0
+        progress = playbackStart + (target - playbackStart) * eased
         applyProgress()
         if progress == 0 || progress == maximumProgress { stopPlayback() }
     }
@@ -194,6 +200,10 @@ public final class DebugScrubberController: NSObject, NSWindowDelegate {
         stopPlayback()
         self.direction = direction
         lastTick = now()
+        playbackStart = progress
+        playbackElapsed = 0
+        let distance = direction > 0 ? maximumProgress - progress : progress
+        playbackSpan = max(playbackDuration * distance / maximumProgress, 0.001)
         isPlaying = true
         playback = scheduler.schedule(interval: 1.0 / 60.0) { [weak self] in
             guard let self else { return }
@@ -209,7 +219,7 @@ public final class DebugScrubberController: NSObject, NSWindowDelegate {
 
     private func applyProgress() {
         slider?.doubleValue = progress
-        progressLabel?.stringValue = String(format: "p = %.3f", progress)
+        progressLabel?.stringValue = "Lid closed: \(Int(min(progress, 1) * 100))% · Sample artwork, not your screen"
         session.updateDebugProgress(progress, direction: direction)
     }
 
@@ -220,16 +230,25 @@ public final class DebugScrubberController: NSObject, NSWindowDelegate {
         }
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 450, height: 154),
+            contentRect: NSRect(x: 0, y: 0, width: 450, height: 200),
             styleMask: [.titled, .closable, .utilityWindow],
             backing: .buffered,
             defer: false
         )
-        panel.title = "lidripple Debug Scrubber"
-        panel.level = .floating
+        panel.title = "lidripple · Effect Preview"
+        // The preview overlay sits at shielding level. Controls must remain
+        // visible and escapable above it even at the fully sealed endpoint.
+        panel.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()) + 1)
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary]
         panel.delegate = self
         panel.center()
+
+        let effects = NSSegmentedControl(labels: DesktopEffect.allCases.map(\.title),
+            trackingMode: .selectOne, target: self, action: #selector(effectChanged(_:)))
+        effects.frame = NSRect(x: 20, y: 149, width: 410, height: 28)
+        effects.selectedSegment = DesktopEffect.allCases.firstIndex(of: session.previewEffect) ?? 0
+        effects.setAccessibilityLabel("Preview effect")
+        panel.contentView?.addSubview(effects)
 
         let slider = NSSlider(
             value: progress,
@@ -240,22 +259,23 @@ public final class DebugScrubberController: NSObject, NSWindowDelegate {
         )
         slider.frame = NSRect(x: 20, y: 96, width: 410, height: 24)
         slider.isContinuous = true
-        slider.setAccessibilityLabel("Fold progress")
+        slider.setAccessibilityLabel("Lid closing progress")
 
-        let fold = NSButton(title: "Play Fold", target: self, action: #selector(playFold))
+        let fold = NSButton(title: "Close Lid", target: self, action: #selector(playFold))
         fold.frame = NSRect(x: 20, y: 52, width: 100, height: 30)
         let reverse = NSButton(
-            title: "Reverse",
+            title: "Open Lid",
             target: self,
             action: #selector(playUnfold)
         )
         reverse.frame = NSRect(x: 128, y: 52, width: 100, height: 30)
         let reset = NSButton(title: "Reset", target: self, action: #selector(resetPressed))
         reset.frame = NSRect(x: 236, y: 52, width: 84, height: 30)
-        let close = NSButton(title: "Close", target: self, action: #selector(closePressed))
+        let close = NSButton(title: "Done", target: self, action: #selector(closePressed))
+        close.keyEquivalent = "\u{1b}"
         close.frame = NSRect(x: 328, y: 52, width: 102, height: 30)
 
-        let label = NSTextField(labelWithString: String(format: "p = %.3f", progress))
+        let label = NSTextField(labelWithString: "Lid closed: 0% · Sample artwork, not your screen")
         label.frame = NSRect(x: 20, y: 18, width: 410, height: 20)
         label.alignment = .right
 
@@ -273,6 +293,11 @@ public final class DebugScrubberController: NSObject, NSWindowDelegate {
     }
 
     @objc private func sliderChanged(_ sender: NSSlider) { setProgress(sender.doubleValue) }
+    @objc private func effectChanged(_ sender: NSSegmentedControl) {
+        guard DesktopEffect.allCases.indices.contains(sender.selectedSegment) else { return }
+        session.selectPreviewEffect(DesktopEffect.allCases[sender.selectedSegment])
+        applyProgress()
+    }
     @objc private func playFold() { playForward() }
     @objc private func playUnfold() { playReverse() }
     @objc private func resetPressed() { reset() }

@@ -5,6 +5,33 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct DebugScrubberControllerTests {
+    @Test func playbackEasesIntoMotionAndReversalPreservesPosition() async {
+        let session = FakeDebugSession()
+        let scheduler = FakeDebugScheduler()
+        let clock = ClockBox()
+        let controller = DebugScrubberController(session: session, scheduler: scheduler,
+            now: { clock.value }, maximumProgress: 1, playbackDuration: 1, presentsPanel: false)
+        await controller.open(intensity: 1)
+        controller.playForward()
+        clock.value = 1.0 / 60
+        scheduler.fire()
+        #expect(controller.progress > 0)
+        #expect(controller.progress < 1.0 / 60)
+        for _ in 0..<20 {
+            clock.value += 1.0 / 60
+            scheduler.fire()
+        }
+        let before = controller.progress
+        controller.playReverse()
+        #expect(controller.progress == before)
+        controller.tick(now: .nan)
+        controller.setProgress(.nan)
+        #expect(controller.progress == before)
+        clock.value += 1.0 / 60
+        scheduler.fire()
+        #expect(controller.progress < before)
+        #expect(scheduler.activeCount == 1)
+    }
     @Test func openInstallsSyntheticSessionAndRepeatedOpenIsIdempotent() async {
         let session = FakeDebugSession()
         let scheduler = FakeDebugScheduler()

@@ -1,4 +1,5 @@
 import Foundation
+import LidRippleCore
 
 /// Minimal storage seam for product preferences. Tests use an in-memory store;
 /// production uses `UserDefaults` through its existing API.
@@ -14,6 +15,7 @@ extension UserDefaults: AppPreferencesStoring {}
 @MainActor
 public final class AppPreferences {
     public enum Key {
+        public static let effect = "lidripple.effect"
         public static let enabled = "lidripple.enabled"
         public static let intensity = "lidripple.intensity"
         public static let launchAtLogin = "lidripple.launchAtLogin"
@@ -23,6 +25,13 @@ public final class AppPreferences {
     }
 
     private let storage: any AppPreferencesStoring
+
+    public var effect: DesktopEffect {
+        get {
+            DesktopEffect(rawValue: storage.object(forKey: Key.effect) as? String ?? "") ?? .fold
+        }
+        set { storage.set(newValue.rawValue, forKey: Key.effect) }
+    }
 
     public init(storage: any AppPreferencesStoring = UserDefaults.standard) {
         self.storage = storage

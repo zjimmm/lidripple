@@ -15,7 +15,7 @@ struct FoldUniforms: Equatable, Sendable {
     var dimensions: SIMD4<Float>
     /// warm-black RGB, blur extra-tap distance
     var colorAndTap: SIMD4<Float>
-    /// reduced-quality flag, geometry progress exponent, seal fade start, reserved
+    /// reduced-quality flag, geometry progress exponent, seal fade start, ripple intensity (0 = Fold)
     var quality: SIMD4<Float>
 
     static func make(

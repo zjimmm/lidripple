@@ -225,8 +225,11 @@ public final class FoldDriver {
             // to avoid adding an unwanted tail to either path.
             let fraction = min(max((now - start) / tuning.scriptedUnfoldSeconds, 0), 1)
             let eased = fraction * fraction * (3 - 2 * fraction)   // smoothstep
-            let elapsed = max(now - start, 0)
-            let timeoutFade = now >= start + tuning.openingTrackHoldSeconds
+            // Fresh samples, even at a stationary angle, keep the measured
+            // pose alive. Only an actual input stall starts the safety release.
+            let lastPoseTime = max(start, lastScriptedOpeningSampleTimestamp ?? start)
+            let elapsed = max(now - lastPoseTime, 0)
+            let timeoutFade = now >= lastPoseTime + tuning.openingTrackHoldSeconds
                 + tuning.scriptedUnfoldSeconds ? 0 : min(max(
                     (tuning.openingTrackHoldSeconds + tuning.scriptedUnfoldSeconds - elapsed)
                         / tuning.scriptedUnfoldSeconds, 0

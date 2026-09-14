@@ -7,6 +7,43 @@ import LidRippleIntegration
 @Suite(.serialized)
 @MainActor
 struct AppCoordinatorTests {
+    @Test func samplesDuringFreshCaptureAreBufferedWithoutDrivingAnimation() async {
+        let harness = makeHarness(permissionGranted: true)
+        harness.lifecycle.holdUnlock = true
+        harness.coordinator.start(sessionAccess: .restricted)
+        let unlock = Task {
+            await harness.coordinator.screenDidUnlock(sessionAccess: .active, onConsole: true)
+        }
+        for _ in 0..<100 where !harness.lifecycle.isWaitingForUnlock { await Task.yield() }
+        #expect(harness.lifecycle.isWaitingForUnlock)
+        let sample = AngleSample(degrees: 45, timestamp: 1)
+        harness.input.emit(sample)
+        #expect(harness.lifecycle.openingSamples.count == 1)
+        #expect(harness.lifecycle.samples.isEmpty)
+        #expect(harness.animation.activeCount == 0)
+        harness.coordinator.screenDidLock()
+        harness.input.emit(.init(degrees: 50, timestamp: 2))
+        #expect(harness.lifecycle.openingSamples.count == 1)
+        harness.lifecycle.releaseUnlock()
+        await unlock.value
+        #expect(harness.input.sessionRestricted)
+    }
+    @Test func previewEffectChoicePersistsAndReturnsToLiveRuntime() async throws {
+        let harness = makeHarness(permissionGranted: true)
+        harness.preferences.effect = .ripple
+        harness.coordinator.start(sessionAccess: .active)
+        #expect(harness.debugPresenter.effects.last == .ripple)
+        try await harness.coordinator.prepareDebugSession(intensity: 1)
+        harness.coordinator.selectPreviewEffect(.fold)
+        #expect(harness.preferences.effect == .fold)
+        #expect(harness.coordinator.menuController.snapshot.effect == .fold)
+        #expect(harness.debugPresenter.effects.last == .fold)
+        await harness.coordinator.finishDebugSession()
+        #expect(!harness.coordinator.isDebugging)
+        #expect(harness.input.startCount >= 2)
+        harness.coordinator.selectPreviewEffect(.ripple)
+        #expect(harness.preferences.effect == .fold)
+    }
     @Test func deniedLaunchStaysInertUntilExplicitPermissionActionSucceeds() {
         let harness = makeHarness(permissionGranted: false, requestResult: true)
 
@@ -58,7 +95,7 @@ struct AppCoordinatorTests {
         #expect(harness.input.stopCount == 1)
     }
 
-    @Test func lockedLaunchWaitsForFreshUnfoldBeforeStartingInput() async {
+    @Test func authorizedUnlockStartsSamplingBeforeFreshCaptureCompletes() async {
         let harness = makeHarness(permissionGranted: true, inputMode: .sensor)
         harness.coordinator.start(sessionAccess: .restricted)
         #expect(harness.lifecycle.lockCount == 1)
@@ -72,7 +109,7 @@ struct AppCoordinatorTests {
         let inputIndex = harness.events.values.firstIndex(of: "input-start")
         #expect(unfoldIndex != nil)
         #expect(inputIndex != nil)
-        if let unfoldIndex, let inputIndex { #expect(unfoldIndex < inputIndex) }
+        if let unfoldIndex, let inputIndex { #expect(inputIndex < unfoldIndex) }
         #expect(harness.input.startCount == 1)
         #expect(!harness.input.sessionRestricted)
         #expect(harness.onboarding.presentCount == 0)
@@ -401,7 +438,7 @@ struct AppCoordinatorTests {
             await Task.yield()
         }
         #expect(harness.lifecycle.unlockCount == 2)
-        #expect(harness.input.startCount == 1)
+        #expect(harness.input.startCount == 2)
         #expect(!harness.input.sessionRestricted)
     }
 
@@ -426,7 +463,7 @@ struct AppCoordinatorTests {
             await Task.yield()
         }
         #expect(harness.lifecycle.unlockCount == 2)
-        #expect(harness.input.startCount == 1)
+        #expect(harness.input.startCount == 2)
     }
 
     @Test func rejectedOffConsoleUnlockInvalidatesEarlierPendingProof() async {
@@ -451,7 +488,8 @@ struct AppCoordinatorTests {
         await oldUnlock.value
         for _ in 0..<100 { await Task.yield() }
         #expect(harness.lifecycle.unlockCount == 1)
-        #expect(harness.input.startCount == 0)
+        #expect(harness.input.startCount == 1)
+        #expect(!harness.input.isEnabled)
         #expect(harness.input.sessionRestricted)
     }
 
@@ -659,6 +697,8 @@ private struct CoordinatorLoginService: LaunchAtLoginServicing {
 
 @MainActor
 private final class CoordinatorLifecycle: AppLifecycleControlling {
+    var openingSamples: [AngleSample] = []
+    func cacheOpeningSample(_ sample: AngleSample) { openingSamples.append(sample) }
     let events: CoordinatorEventLog
     var state = FoldState(phase: .idle, progress: 0, velocity: 0)
     var ingestResult = FoldState(phase: .idle, progress: 0, velocity: 0)
@@ -805,6 +845,8 @@ private final class CoordinatorInput: AppInputSourceControlling {
 
 @MainActor
 private final class CoordinatorDebugPresenter: AppDebugPresenting {
+    var effects: [DesktopEffect] = []
+    func setEffect(_ effect: DesktopEffect) { effects.append(effect) }
     var beginTunings: [FoldTuning] = []
     var tunings: [FoldTuning] = []
     var endCount = 0

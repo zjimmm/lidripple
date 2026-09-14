@@ -36,6 +36,13 @@ public final class FoldRenderer {
     private let stateLock = NSLock()
     private var currentTuning: FoldTuning
     private var currentReducedQuality = false
+    private var currentEffect: DesktopEffect = .fold
+
+    public func setEffect(_ effect: DesktopEffect) {
+        stateLock.lock()
+        currentEffect = effect
+        stateLock.unlock()
+    }
     private var nextUniformBuffer = 0
     private var pyramid: TexturePyramid?
     private(set) var pyramidBuildCount = 0
@@ -311,6 +318,7 @@ public final class FoldRenderer {
         }
         let tuning = currentTuning
         let reducedQuality = currentReducedQuality
+        let effect = currentEffect
         stateLock.unlock()
 
         inFlightSemaphore.wait()
@@ -331,6 +339,7 @@ public final class FoldRenderer {
             sourceSize: SIMD2<Int>(pyramid.texture.width, pyramid.texture.height),
             reducedQuality: reducedQuality
         )
+        uniforms.quality.w = effect == .ripple ? Float(tuning.intensity) : 0
         withUnsafeBytes(of: &uniforms) { bytes in
             uniformBuffer.contents().copyMemory(from: bytes.baseAddress!, byteCount: bytes.count)
         }
@@ -356,14 +365,18 @@ public final class FoldRenderer {
         encoder.setFragmentTexture(blueNoise, index: 1)
         encoder.setFragmentSamplerState(sampler, index: 0)
         encoder.setFragmentBuffer(uniformBuffer, offset: 0, index: 1)
-        encoder.setRenderPipelineState(backdropPipeline)
-        encoder.drawIndexedPrimitives(
-            type: .triangle,
-            indexCount: indexCount,
-            indexType: .uint32,
-            indexBuffer: indexBuffer,
-            indexBufferOffset: 0
-        )
+        // Ripple is opaque and full-screen; the nine-sample contextual backing
+        // is completely covered, so avoid that draw and its bandwidth.
+        if effect == .fold {
+            encoder.setRenderPipelineState(backdropPipeline)
+            encoder.drawIndexedPrimitives(
+                type: .triangle,
+                indexCount: indexCount,
+                indexType: .uint32,
+                indexBuffer: indexBuffer,
+                indexBufferOffset: 0
+            )
+        }
         encoder.setRenderPipelineState(renderPipeline)
         encoder.drawIndexedPrimitives(
             type: .triangle,

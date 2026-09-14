@@ -17,6 +17,7 @@ final class OverlayLifecycleOutput: FoldLifecycleOutput {
     var captureExclusionWindowID: CGWindowID { presenter.windowID }
 
     func setSource(_ frame: CapturedFrame) throws { try presenter.setSource(frame) }
+    func beginWakeCover() { presenter.beginWakeCover() }
     func setFallbackSource() throws { try presenter.setFallbackSource() }
     func clearSource() { presenter.clearSource() }
     func update(_ state: FoldState) { presenter.update(state) }

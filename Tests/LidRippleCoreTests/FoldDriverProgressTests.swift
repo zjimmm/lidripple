@@ -220,6 +220,31 @@ private func sweepTrackingPeak(
     #expect(driver.tick(now: 101.5).phase == .idle)
 }
 
+@Test func longOpeningAndPauseRemainLidDrivenBeyondOldTwoSecondTimeout() {
+    let driver = FoldDriver()
+    let tuning = FoldTuning.default
+    driver.beginScriptedUnfold(now: 10)
+    driver.alignScriptedOpening(.init(degrees: 35, timestamp: 10))
+    var progressValues: [Double] = []
+    for frame in 1...360 {
+        let now = 10 + Double(frame) / 60
+        // Pause at 35° for three seconds, then take three seconds to open.
+        let angle = frame <= 180 ? 35 : 35 + Double(frame - 180) / 3
+        driver.trackScriptedOpening(.init(degrees: angle.rounded(), timestamp: now))
+        let state = driver.tick(now: now)
+        progressValues.append(state.progress)
+        if frame <= 180 {
+            let expected = (tuning.openingTrackEndAngle - 35)
+                / (tuning.openingTrackEndAngle - tuning.sealAngle)
+            #expect(abs(state.progress - expected) < 0.0001)
+            #expect(state.phase == .unfolding)
+        }
+    }
+    #expect(zip(progressValues, progressValues.dropFirst()).allSatisfy { $1 <= $0 + 0.000001 })
+    #expect(Set(progressValues.suffix(180)).count > 150)
+    #expect(driver.tick(now: 16.5).phase == .idle)
+}
+
 @Test func wholeDegreeOpeningStepsAreSpreadAcrossDisplayFrames() {
     let driver = FoldDriver()
     let tuning = FoldTuning.default
@@ -265,7 +290,7 @@ private func sweepTrackingPeak(
     let fading = driver.tick(now: 10 + tuning.openingTrackHoldSeconds + tuning.scriptedUnfoldSeconds / 2)
     #expect(fading.progress > 0)
     #expect(fading.progress < held.progress)
-    #expect(driver.tick(now: 10 + tuning.openingTrackHoldSeconds + tuning.scriptedUnfoldSeconds).phase == .idle)
+    #expect(driver.tick(now: 10.1 + tuning.openingTrackHoldSeconds + tuning.scriptedUnfoldSeconds).phase == .idle)
 }
 
 @Test func losingSensorReleasesScriptedOpeningConstraint() {

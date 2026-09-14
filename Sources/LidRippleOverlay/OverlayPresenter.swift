@@ -15,6 +15,12 @@ public final class OverlayPresenter {
     private let presentation: any FoldPresentation
     private var fallbackReveal = false
     private var debugPreview = false
+    private let container: NSView
+    private let frost: NSVisualEffectView
+    private var frostTimeout: Task<Void, Never>?
+    private var frostStarted: TimeInterval?
+    private var frostActive = false
+    private var frostGeneration: UInt64 = 0
 
     /// WindowServer identifier used to exclude the overlay from screen capture.
     public var windowID: CGWindowID { CGWindowID(window.windowNumber) }
@@ -31,10 +37,59 @@ public final class OverlayPresenter {
     init(screen: NSScreen, presentation: any FoldPresentation) {
         let window = OverlayWindow(screen: screen)
         presentation.view.frame = NSRect(origin: .zero, size: screen.frame.size)
-        window.contentView = presentation.view
+        let container = NSView(frame: presentation.view.frame)
+        presentation.view.autoresizingMask = [.width, .height]
+        container.addSubview(presentation.view)
+        let frost = NSVisualEffectView(frame: container.bounds)
+        frost.autoresizingMask = [.width, .height]
+        frost.material = .hudWindow
+        frost.blendingMode = .behindWindow
+        frost.state = .active
+        frost.isHidden = true
+        container.addSubview(frost)
+        window.contentView = container
 
         self.presentation = presentation
         self.window = window
+        self.container = container
+        self.frost = frost
+    }
+
+    /// Same excluded overlay window, no cached pixels. The native frosted
+    /// material obscures the desktop while a fresh frame and pose are prepared.
+    public func beginWakeCover() {
+        endWakeCover()
+        frostActive = true
+        presentation.view.isHidden = true
+        frost.alphaValue = 1
+        frost.isHidden = false
+        window.alphaValue = 1
+        window.orderFrontRegardless()
+        let generation = frostGeneration
+        frostTimeout = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .milliseconds(550)) }
+            catch { return }
+            guard let self, self.frostGeneration == generation, self.frostActive else { return }
+            let waitingForFrame = self.frostStarted == nil
+            self.endWakeCover()
+            if waitingForFrame { self.window.orderOut(nil) }
+        }
+    }
+
+    private func endWakeCover() {
+        frostGeneration &+= 1
+        frostTimeout?.cancel()
+        frostTimeout = nil
+        frostActive = false
+        frostStarted = nil
+        frost.isHidden = true
+        frost.alphaValue = 1
+        presentation.view.isHidden = false
+    }
+
+    static func wakeCoverOpacity(elapsed: TimeInterval) -> Double {
+        let t = min(max(elapsed / 0.16, 0), 1)
+        return 1 - t * t * (3 - 2 * t)
     }
 
     public func setSource(_ frame: CapturedFrame) throws {
@@ -60,6 +115,7 @@ public final class OverlayPresenter {
     }
 
     public func clearSource() {
+        endWakeCover()
         presentation.clearSource()
         fallbackReveal = false
         window.alphaValue = 1
@@ -67,6 +123,7 @@ public final class OverlayPresenter {
 
     /// Temporarily removes the overlay without changing its installed source.
     public func hide() {
+        endWakeCover()
         window.orderOut(nil)
     }
 
@@ -103,6 +160,10 @@ public final class OverlayPresenter {
         presentation.setTuning(tuning)
     }
 
+    public func setEffect(_ effect: DesktopEffect) {
+        presentation.setEffect(effect)
+    }
+
     /// Installs generated pixels for the permission-free debug scrubber. This
     /// path never invokes ScreenCaptureKit and cannot contain desktop content.
     public func beginDebugPreview(tuning: FoldTuning) throws {
@@ -110,15 +171,7 @@ public final class OverlayPresenter {
               let device = foldView.device
         else { throw RendererError.metalUnavailable }
 
-        let scale = window.screen?.backingScaleFactor ?? 1
-        let size = presentation.view.bounds.size
-        let width = max(Int((size.width * scale).rounded()), 1)
-        let height = max(Int((size.height * scale).rounded()), 1)
-        let source = try SyntheticFrame.makeCheckerboardGradientTexture(
-            device: device,
-            width: width,
-            height: height
-        )
+        let source = try SyntheticFrame.makePreviewArtworkTexture(device: device)
         foldView.updateTuning(tuning)
         try foldView.setPreviewSource(source)
         fallbackReveal = false
@@ -159,8 +212,22 @@ public final class OverlayPresenter {
             if !window.isVisible { window.orderFrontRegardless() }
         }
         presentation.update(state)
+        if frostActive {
+            if state.phase == .unfolding, !fallbackReveal {
+                // Keep the first rendered pose behind frost. Its geometry is
+                // unchanged; only the source-free cover fades away.
+                presentation.view.isHidden = false
+                let now = ProcessInfo.processInfo.systemUptime
+                if frostStarted == nil { frostStarted = now }
+                frost.alphaValue = Self.wakeCoverOpacity(elapsed: now - (frostStarted ?? now))
+                if frost.alphaValue <= 0 { endWakeCover() }
+            } else {
+                endWakeCover()
+            }
+        }
     }
 
     var windowForTesting: OverlayWindow { window }
     var isFallbackRevealForTesting: Bool { fallbackReveal }
+    var isWakeCoverActiveForTesting: Bool { frostActive }
 }

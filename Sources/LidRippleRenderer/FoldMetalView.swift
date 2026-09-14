@@ -17,10 +17,12 @@ public protocol FoldPresentation: AnyObject {
     func clearSource()
     func setReducedQuality(_ reduced: Bool)
     func setTuning(_ tuning: FoldTuning)
+    func setEffect(_ effect: DesktopEffect)
     func update(_ state: FoldState)
 }
 
 public extension FoldPresentation {
+    func setEffect(_ effect: DesktopEffect) {}
     /// Non-rendering test presentations may ignore tuning.
     func setTuning(_ tuning: FoldTuning) {}
 }
@@ -30,6 +32,10 @@ public extension FoldPresentation {
 /// renderer's three in-flight uniform buffers.
 @MainActor
 public final class FoldMetalView: MTKView, MTKViewDelegate, FoldPresentation {
+    public func setEffect(_ effect: DesktopEffect) {
+        foldRenderer.setEffect(effect)
+        needsDisplay = true
+    }
     public var view: NSView { self }
     public private(set) var progress: Double = 0
     public private(set) var lastRenderError: Error?

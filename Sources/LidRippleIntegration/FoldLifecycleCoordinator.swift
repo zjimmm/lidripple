@@ -59,10 +59,30 @@ public final class FoldLifecycleCoordinator {
     private var hasLoggedOpeningSample = false
     private var awaitingFirstOpeningSample = false
     private var firstOpeningSampleDeadline: TimeInterval?
+    private var cachedOpeningSample: AngleSample?
+    private var openingPresentationDeadline: TimeInterval?
+    // A late decorative reveal is worse than no reveal: the desktop is already
+    // exposed. Keep this bound independent of the capture failure timeout.
+    private let maximumOpeningDelay: TimeInterval = 0.3
+    private let maximumOpeningSampleAge: TimeInterval = 0.1
+
+    public func cacheOpeningSample(_ sample: AngleSample) {
+        guard isEnabled, sessionAccess == .active, inputAvailability == .sensor,
+              sample.degrees.isFinite, sample.timestamp.isFinite,
+              sample.timestamp > (cachedOpeningSample?.timestamp ?? -.infinity) else { return }
+        cachedOpeningSample = sample
+    }
     private var targetDisplayID: CGDirectDisplayID?
     private var isEnabled = true
     private var sessionAccess: SessionAccess = .active
     private var displayAvailable = false
+    private var wakeRevealEnabled = true
+    private var didSleep = false
+
+    /// Product policy only; ordinary physical close/reversal is unaffected.
+    public func setWakeRevealEnabled(_ enabled: Bool) {
+        wakeRevealEnabled = enabled
+    }
 
     public init(
         driver: FoldDriver = FoldDriver(),
@@ -98,6 +118,10 @@ public final class FoldLifecycleCoordinator {
             if inputAvailability == .sensor {
                 if awaitingFirstOpeningSample, sample.degrees.isFinite,
                    sample.timestamp.isFinite {
+                    if let deadline = openingPresentationDeadline, sample.timestamp > deadline {
+                        skipLateOpening()
+                        return state
+                    }
                     let previous = state.phase
                     state = driver.alignScriptedOpening(sample)
                     awaitingFirstOpeningSample = false
@@ -130,11 +154,17 @@ public final class FoldLifecycleCoordinator {
     @discardableResult
     public func tick(now: TimeInterval) -> FoldState {
         guard isEnabled, sessionAccess == .active, displayAvailable else { return state }
+        if awaitingFirstOpeningSample, let deadline = openingPresentationDeadline, now > deadline {
+            skipLateOpening()
+            return state
+        }
         if awaitingFirstOpeningSample,
            let deadline = firstOpeningSampleDeadline, now >= deadline {
-            awaitingFirstOpeningSample = false
-            firstOpeningSampleDeadline = nil
             wakeLog.notice("freshUnfold firstAngleTimedOut")
+            // A sensor-backed machine with no fresh pose must not invent a
+            // fully closed starting point over an already visible desktop.
+            skipLateOpening()
+            return state
         }
         let previous = state.phase
         state = driver.tick(now: now)
@@ -148,6 +178,7 @@ public final class FoldLifecycleCoordinator {
     @discardableResult
     public func systemWillSleep() -> FoldState {
         guard isEnabled else { return state }
+        didSleep = true
         requiresScriptedUnfold = true
         state = driver.signalSleep()
         if frameInstalled { output?.update(state) }
@@ -184,20 +215,40 @@ public final class FoldLifecycleCoordinator {
 
         sessionAccess = .active
         let cycle = beginNewCycle(clearOutput: true, hide: true)
-
-        do {
+        let skipWakeReveal = didSleep && !wakeRevealEnabled
+        if skipWakeReveal {
+            requiresScriptedUnfold = false
+            state = driver.reset()
             await capture.reset()
             guard isCurrent(cycle) else { return state }
+            didSleep = false
+            // Refresh display availability without installing or showing pixels.
+            targetDisplayID = displayID()
+            displayAvailable = targetDisplayID != nil
+                && (output?.reconfigureForBuiltInDisplay() ?? false)
+            wakeLog.notice("freshUnfold skippedByEffectPolicy")
+            return state
+        }
+        didSleep = false
+        openingPresentationDeadline = now() + maximumOpeningDelay
+
+        do {
             guard let display = displayID(),
                   let output,
                   output.reconfigureForBuiltInDisplay()
             else {
                 displayAvailable = false
                 state = driver.signalSleep()
+                await capture.reset()
                 return state
             }
             targetDisplayID = display
             displayAvailable = true
+            // Session authority was established before entering this method.
+            // Put the source-free frost up before any capture startup awaits.
+            output.beginWakeCover()
+            await capture.reset()
+            guard isCurrent(cycle) else { return state }
             captureActivity = .warming
             try await capture.warm(
                 displayID: display,
@@ -234,11 +285,20 @@ public final class FoldLifecycleCoordinator {
 
         hasLoggedOpeningSample = false
         let revealStart = now()
+        if let deadline = openingPresentationDeadline, revealStart > deadline {
+            skipLateOpening()
+            return state
+        }
         state = driver.beginScriptedUnfold(now: revealStart)
         awaitingFirstOpeningSample = frameInstalled && !usesFallbackReveal
             && inputAvailability == .sensor
         firstOpeningSampleDeadline = awaitingFirstOpeningSample
             ? revealStart + driver.openingFirstSampleWaitSeconds : nil
+        if awaitingFirstOpeningSample, let sample = cachedOpeningSample,
+           sample.timestamp <= revealStart,
+           revealStart - sample.timestamp <= maximumOpeningSampleAge {
+            return ingest(sample)
+        }
         if frameInstalled && !awaitingFirstOpeningSample {
             output?.update(state)
             overlayVisible = true
@@ -514,12 +574,22 @@ public final class FoldLifecycleCoordinator {
         frameInstalled = false
         awaitingFirstOpeningSample = false
         firstOpeningSampleDeadline = nil
+        cachedOpeningSample = nil
+        openingPresentationDeadline = nil
         captureActivity = .idle
         usesFallbackReveal = false
         if clearOutput { output?.clearSource() }
         if hide { output?.hide() }
         if hide { overlayVisible = false }
         return generation
+    }
+
+    private func skipLateOpening() {
+        wakeLog.notice("freshUnfold skippedLatePresentation")
+        requiresScriptedUnfold = false
+        state = driver.reset()
+        output?.update(state)
+        invalidateCapture(clearOutput: true, hide: true)
     }
 
     private func invalidateCapture(clearOutput: Bool, hide: Bool) {

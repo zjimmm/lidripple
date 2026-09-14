@@ -1,7 +1,9 @@
 import AppKit
 import Foundation
+import LidRippleCore
 
 public struct MenuBarSnapshot: Equatable, Sendable {
+    public var effect: DesktopEffect
     public var enabled: Bool
     public var intensity: Double
     public var launchAtLogin: LaunchAtLoginServiceStatus
@@ -13,9 +15,11 @@ public struct MenuBarSnapshot: Equatable, Sendable {
         intensity: Double,
         launchAtLogin: LaunchAtLoginServiceStatus,
         inputMode: String,
-        screenRecording: ScreenRecordingPermissionState
+        screenRecording: ScreenRecordingPermissionState,
+        effect: DesktopEffect = .fold
     ) {
         self.enabled = enabled
+        self.effect = effect
         self.intensity = AppPreferences.clampIntensity(intensity)
         self.launchAtLogin = launchAtLogin
         self.inputMode = inputMode
@@ -25,6 +29,7 @@ public struct MenuBarSnapshot: Equatable, Sendable {
 
 @MainActor
 public struct MenuBarActions {
+    public var setEffect: (DesktopEffect) -> Void
     /// A direct status-menu interaction is evidence the user's desktop UI is
     /// reachable when macOS omits its private lock-state dictionary key.
     public var menuDidOpen: () -> Void
@@ -41,6 +46,7 @@ public struct MenuBarActions {
 
     public init(
         menuDidOpen: @escaping () -> Void = {},
+        setEffect: @escaping (DesktopEffect) -> Void = { _ in },
         setEnabled: @escaping (Bool) -> Void,
         setIntensity: @escaping (Double) -> Void,
         setLaunchAtLogin: @escaping (Bool) -> Void,
@@ -52,6 +58,7 @@ public struct MenuBarActions {
         reportError: @escaping (String) -> Void
     ) {
         self.menuDidOpen = menuDidOpen
+        self.setEffect = setEffect
         self.setEnabled = setEnabled
         self.setIntensity = setIntensity
         self.setLaunchAtLogin = setLaunchAtLogin
@@ -71,6 +78,7 @@ public final class MenuBarController: NSObject {
     )!
 
     public enum ItemID: String {
+        case effect
         case enabled
         case intensity
         case launchAtLogin
@@ -87,15 +95,13 @@ public final class MenuBarController: NSObject {
     private let actions: MenuBarActions
     private var statusItem: NSStatusItem?
     private let enabledItem = NSMenuItem()
-    private let intensityItem = NSMenuItem()
+    private let effectItem = NSMenuItem()
     private let launchItem = NSMenuItem()
     private let inputModeItem = NSMenuItem()
     private let screenRecordingItem = NSMenuItem()
     private let debugItem = NSMenuItem()
     private let updateItem = NSMenuItem()
     private let quitItem = NSMenuItem()
-    private var intensitySlider: NSSlider?
-    private var intensityLabel: NSTextField?
 
     public init(
         snapshot: MenuBarSnapshot,
@@ -127,10 +133,10 @@ public final class MenuBarController: NSObject {
     public func update(_ snapshot: MenuBarSnapshot) {
         self.snapshot = snapshot
         enabledItem.state = snapshot.enabled ? .on : .off
-
-        let intensity = AppPreferences.clampIntensity(snapshot.intensity)
-        intensitySlider?.doubleValue = intensity
-        intensityLabel?.stringValue = "Intensity: \(Int((intensity * 100).rounded()))%"
+        effectItem.title = "Effect: \(snapshot.effect.title)"
+        for item in effectItem.submenu?.items ?? [] {
+            item.state = item.representedObject as? String == snapshot.effect.rawValue ? .on : .off
+        }
 
         switch snapshot.launchAtLogin {
         case .enabled:
@@ -207,26 +213,19 @@ public final class MenuBarController: NSObject {
         )
         menu.addItem(enabledItem)
 
-        let intensityView = NSView(frame: NSRect(x: 0, y: 0, width: 260, height: 54))
-        let label = NSTextField(labelWithString: "Intensity: 100%")
-        label.frame = NSRect(x: 14, y: 29, width: 232, height: 17)
-        let slider = NSSlider(
-            value: 1,
-            minValue: 0.5,
-            maxValue: 1,
-            target: self,
-            action: #selector(intensityChanged)
-        )
-        slider.frame = NSRect(x: 12, y: 3, width: 236, height: 24)
-        slider.isContinuous = true
-        slider.setAccessibilityLabel("Fold effect intensity")
-        intensityView.addSubview(label)
-        intensityView.addSubview(slider)
-        intensityItem.identifier = identifier(.intensity)
-        intensityItem.view = intensityView
-        menu.addItem(intensityItem)
-        intensityLabel = label
-        intensitySlider = slider
+        let effects = NSMenu(title: "Effect")
+        for effect in DesktopEffect.allCases {
+            let item = NSMenuItem(title: effect.title, action: #selector(effectSelected(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = effect.rawValue
+            item.toolTip = effect == .fold
+                ? "A soft perspective fold that follows your lid."
+                : "Hinge-born liquid waves that follow your lid in both directions."
+            effects.addItem(item)
+        }
+        effectItem.submenu = effects
+        effectItem.identifier = identifier(.effect)
+        menu.addItem(effectItem)
 
         configure(
             launchItem,
@@ -252,7 +251,7 @@ public final class MenuBarController: NSObject {
         configure(
             debugItem,
             id: .debugScrubber,
-            title: "Open Debug Scrubber…",
+            title: "Preview Effect…",
             action: #selector(openDebugScrubber),
             keyEquivalent: "d"
         )
@@ -299,10 +298,10 @@ public final class MenuBarController: NSObject {
         actions.setEnabled(!snapshot.enabled)
     }
 
-    @objc private func intensityChanged(_ sender: NSSlider) {
-        let value = AppPreferences.clampIntensity(sender.doubleValue)
-        intensityLabel?.stringValue = "Intensity: \(Int((value * 100).rounded()))%"
-        actions.setIntensity(value)
+    @objc private func effectSelected(_ sender: NSMenuItem) {
+        guard let value = sender.representedObject as? String,
+              let effect = DesktopEffect(rawValue: value) else { return }
+        actions.setEffect(effect)
     }
 
     @objc private func toggleLaunchAtLogin() {

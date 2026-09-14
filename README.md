@@ -51,12 +51,35 @@ qualification on a no-HID Mac; that hardware path remains experimental and unver
 
 ## Controls
 
-The menu-bar UI exposes Enable, intensity (50–100%), Launch at Login, the
-active input mode, Screen Recording state, a permission-free debug scrubber, Check for
-Updates, and Quit. Intensity changes only blur radius, rotation, and squash gain; it does
-not change thresholds, spring dynamics, timing, or capture behavior.
+After an authorized unlock, fresh lid sampling runs alongside fresh screen capture.
+A native frosted cover in the capture-excluded overlay obscures the preparation
+gap without storing an old desktop image. It clears over 160 ms as the measured
+opening frame appears, has a 550 ms safety timeout, and is removed immediately
+on session restrictions or abort. This experimental handoff cannot cover system
+frames shown before the app receives unlock notification.
+Both effects preserve full measured opening progress with display-rate smoothing
+of whole-degree sensor steps. There is no separate entrance ramp or depth cap.
+Fresh sensor samples keep the opening pose active even through a slow opening or
+pause; the safety timeout releases the image only after sensor updates stop.
+The opening effect starts at a recent measured pose. If preparation takes over
+300 ms, or no fresh sensor pose arrives within the short first-sample wait, the
+decorative reveal is skipped instead of folding an already-visible desktop again.
+No pre-lock image or black cover is retained. macOS can expose the desktop before
+the app receives unlock notification, so this reduces late replay rather than
+guaranteeing a flash-free wake.
 
-The debug scrubber uses a generated checkerboard/gradient rather than desktop pixels.
+The menu-bar UI exposes Enable, Effect (Fold or Ripple), Launch at Login, the
+active input mode, Screen Recording state, a permission-free effect preview, Check for
+Updates, and Quit. Fold remains the default. Ripple is a full-screen liquid refraction
+originating at the bottom hinge: its waves follow progress on closing and opening,
+hold with the lid, and fade to the same sealed endpoint. The selection is saved.
+Both effects use curated strength defaults; the former intensity slider is no longer
+shown, and its saved value resets to full strength at app initialization.
+
+Preview Effect shows a compact, automatically looping MacBook illustration with
+procedural landscape artwork. Switch between Fold and Ripple to see an approximation
+of each effect. It never captures or covers the desktop, and live lid tracking continues.
+Closing the preview stops its animation; sleep and session restrictions close it too.
 “Check for Updates” opens the GitHub Releases page in the default browser; the app does
 not make an update request itself.
 

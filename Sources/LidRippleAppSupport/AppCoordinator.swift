@@ -32,11 +32,18 @@ public protocol AppLifecycleControlling: AnyObject {
     @discardableResult func setEnabled(_ enabled: Bool) -> FoldState
     func setReducedQuality(_ reduced: Bool)
     func setTuning(_ tuning: FoldTuning)
+    func cacheOpeningSample(_ sample: AngleSample)
+    func setWakeRevealEnabled(_ enabled: Bool)
     func waitForPendingCapture() async
     func shutdown() async
 }
 
 extension FoldLifecycleCoordinator: AppLifecycleControlling {}
+
+public extension AppLifecycleControlling {
+    func cacheOpeningSample(_ sample: AngleSample) {}
+    func setWakeRevealEnabled(_ enabled: Bool) {}
+}
 
 @MainActor
 public protocol AppInputSourceControlling: AnyObject {
@@ -57,6 +64,7 @@ extension InputSourceController: AppInputSourceControlling {}
 
 @MainActor
 public protocol AppDebugPresenting: AnyObject {
+    func setEffect(_ effect: DesktopEffect)
     func beginDebugPreview(tuning: FoldTuning) throws
     func updateDebugPreview(progress: Double, direction: Double)
     func endDebugPreview()
@@ -64,6 +72,10 @@ public protocol AppDebugPresenting: AnyObject {
 }
 
 extension OverlayPresenter: AppDebugPresenting {}
+
+public extension AppDebugPresenting {
+    func setEffect(_ effect: DesktopEffect) {}
+}
 
 @MainActor
 public protocol AppAnimationCancellation: AnyObject {
@@ -184,6 +196,7 @@ public final class AppCoordinator: DebugScrubberSession {
 
     private var inputSource: (any AppInputSourceControlling)!
     private var debugScrubber: DebugScrubberController!
+    private let effectPreview = EffectPreviewController()
     private var animation: (any AppAnimationCancellation)?
     private var sessionRestricted = false
     private var isTerminating = false
@@ -233,6 +246,9 @@ public final class AppCoordinator: DebugScrubberSession {
         runtimeAnchor: AnyObject? = nil
     ) {
         self.preferences = preferences
+        // The public strength control has retired. Use the curated default,
+        // including for users with an old saved slider position.
+        preferences.intensity = 1
         self.lifecycle = lifecycle
         self.permission = permission
         self.onboarding = onboarding
@@ -322,6 +338,8 @@ public final class AppCoordinator: DebugScrubberSession {
     public func start(sessionAccess: ConsoleSessionAccess) {
         guard !isStarted, !isTerminating else { return }
         isStarted = true
+        debugPresenter.setEffect(preferences.effect)
+        lifecycle.setWakeRevealEnabled(true)
         lifecycle.setTuning(currentTuning)
         _ = launchAtLogin.refresh()
         sessionRestricted = sessionAccess != .active || sessionAccessNow() != .active
@@ -352,6 +370,14 @@ public final class AppCoordinator: DebugScrubberSession {
         preferences.intensity = intensity
         lifecycle.setTuning(currentTuning)
         if isDebugging { debugPresenter.setTuning(currentTuning) }
+        refreshMenu()
+    }
+
+    public func setEffect(_ effect: DesktopEffect) {
+        preferences.effect = effect
+        lifecycle.setWakeRevealEnabled(true)
+        debugPresenter.setEffect(effect)
+        effectPreview.update(effect: effect)
         refreshMenu()
     }
 
@@ -408,12 +434,8 @@ public final class AppCoordinator: DebugScrubberSession {
     public func openDebugScrubber() {
         guard isStarted, !isTerminating, !sessionRestricted,
               isRuntimeSessionAuthorizedNow() else { return }
-        let generation = debugSessionGeneration
-        Task { @MainActor [weak self] in
-            guard let self, generation == self.debugSessionGeneration,
-                  !self.sessionRestricted, !self.isTerminating else { return }
-            await self.debugScrubber.open(intensity: self.preferences.intensity)
-        }
+        effectPreview.onSelect = { [weak self] in self?.setEffect($0) }
+        effectPreview.show(effect: preferences.effect)
     }
 
     /// When the private lock-state key is absent, startup must fail closed.
@@ -542,6 +564,7 @@ public final class AppCoordinator: DebugScrubberSession {
     public func shutdown() async {
         guard !isTerminating else { return }
         isTerminating = true
+        effectPreview.close()
         stopAnimation()
         inputSource.stop()
         debugSessionGeneration &+= 1
@@ -591,6 +614,13 @@ public final class AppCoordinator: DebugScrubberSession {
         debugPresenter.setTuning(FoldTuning.default.withIntensity(intensity))
     }
 
+    public var previewEffect: DesktopEffect { preferences.effect }
+
+    public func selectPreviewEffect(_ effect: DesktopEffect) {
+        guard isDebugging else { return }
+        setEffect(effect)
+    }
+
     public func finishDebugSession() async {
         debugPresenter.endDebugPreview()
         guard isDebugging else { return }
@@ -638,12 +668,16 @@ public final class AppCoordinator: DebugScrubberSession {
             return
         }
         inputSource.setSessionRestricted(false)
-        sourceModeChanged(inputSource.start())
+        sourceModeChanged(inputSource.isEnabled ? inputSource.mode : inputSource.start())
     }
 
     private func receive(_ sample: AngleSample) {
         guard runtimePermitted else { return }
         guard enforceRuntimeSession() else { return }
+        if isUnlocking {
+            lifecycle.cacheOpeningSample(sample)
+            return
+        }
         let state = lifecycle.ingest(sample)
         updateAnimation(for: state)
     }
@@ -771,6 +805,11 @@ public final class AppCoordinator: DebugScrubberSession {
         }
         if preferences.isEnabled, permission.state == .granted, !isDebugging {
             _ = lifecycle.setEnabled(true)
+            // Sampling and fresh capture overlap only after session permission
+            // has been established. receive() buffers poses, never animates,
+            // until the unlock transaction finishes.
+            inputSource.setSessionRestricted(false)
+            sourceModeChanged(inputSource.start())
             let state = await lifecycle.sessionUnlocked(
                 firstFrameTimeout: 0.5,
                 now: now
@@ -832,6 +871,7 @@ public final class AppCoordinator: DebugScrubberSession {
     }
 
     private func abortDebugForRestriction() {
+        effectPreview.close()
         debugSessionGeneration &+= 1
         debugScrubber.abortForSystemRestriction()
         debugPresenter.endDebugPreview()
@@ -848,13 +888,15 @@ public final class AppCoordinator: DebugScrubberSession {
             intensity: preferences.intensity,
             launchAtLogin: launchAtLogin.state,
             inputMode: inputMode.menuTitle,
-            screenRecording: permission.state
+            screenRecording: permission.state,
+            effect: preferences.effect
         )
     }
 
     private func makeMenuActions() -> MenuBarActions {
         MenuBarActions(
             menuDidOpen: { [weak self] in self?.menuDidOpen() },
+            setEffect: { [weak self] in self?.setEffect($0) },
             setEnabled: { [weak self] in self?.setEnabled($0) },
             setIntensity: { [weak self] in self?.setIntensity($0) },
             setLaunchAtLogin: { [weak self] in self?.setLaunchAtLogin($0) },
@@ -888,6 +930,7 @@ private final class ProductionOverlayLifecycleOutput: FoldLifecycleOutput {
 
     var captureExclusionWindowID: CGWindowID { presenter.windowID }
     func setSource(_ frame: CapturedFrame) throws { try presenter.setSource(frame) }
+    func beginWakeCover() { presenter.beginWakeCover() }
     func setFallbackSource() throws { try presenter.setFallbackSource() }
     func clearSource() { presenter.clearSource() }
     func update(_ state: FoldState) { presenter.update(state) }

@@ -5,6 +5,15 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct AppPreferencesTests {
+    @Test func effectSelectionPersistsAndUnknownValuesFallBackToFold() {
+        let store = MemoryPreferences()
+        let preferences = AppPreferences(storage: store)
+        #expect(preferences.effect == .fold)
+        preferences.effect = .ripple
+        #expect(AppPreferences(storage: store).effect == .ripple)
+        store.set("unknown", forKey: AppPreferences.Key.effect)
+        #expect(preferences.effect == .fold)
+    }
     @Test func defaultsAreProductDefaultsAndContainNoRuntimeState() {
         let store = MemoryPreferences()
         let preferences = AppPreferences(storage: store)

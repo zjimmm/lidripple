@@ -1,16 +1,32 @@
 import AppKit
 import Testing
+import LidRippleCore
 @testable import LidRippleAppSupport
 
 @Suite(.serialized)
 @MainActor
 struct MenuBarControllerTests {
+    @Test func effectMenuForwardsSelectionAndReflectsSnapshot() throws {
+        let recorder = ActionRecorder()
+        let controller = makeController(recorder: recorder)
+        let submenu = try #require(item(.effect, in: controller).submenu)
+        #expect(submenu.items.map(\.title) == ["Fold", "Ripple"])
+        #expect(submenu.items[0].state == .on)
+        submenu.performActionForItem(at: 1)
+        #expect(recorder.effects == [.ripple])
+        var snapshot = controller.snapshot
+        snapshot.effect = .ripple
+        controller.update(snapshot)
+        #expect(item(.effect, in: controller).title == "Effect: Ripple")
+        #expect(submenu.items[0].state == .off)
+        #expect(submenu.items[1].state == .on)
+    }
     @Test func menuHasCompleteProductSurfaceInRequiredOrder() {
         let controller = makeController(recorder: ActionRecorder())
         let ids = controller.menu.items.compactMap(\.identifier?.rawValue)
         #expect(ids == [
             "lidripple.menu.enabled",
-            "lidripple.menu.intensity",
+            "lidripple.menu.effect",
             "lidripple.menu.launchAtLogin",
             "lidripple.menu.inputMode",
             "lidripple.menu.screenRecording",
@@ -45,10 +61,7 @@ struct MenuBarControllerTests {
         #expect(item(.screenRecording, in: controller).title.contains("Needs Permission"))
         #expect(item(.screenRecording, in: controller).isEnabled)
 
-        let slider = intensitySlider(in: controller)
-        #expect(slider?.doubleValue == 0.5)
-        let label = intensityLabel(in: controller)
-        #expect(label?.stringValue == "Intensity: 50%")
+        #expect(controller.menu.items.allSatisfy { $0.view == nil })
     }
 
     @Test func refreshCoversSensorUnavailableAndGrantedStates() {
@@ -85,11 +98,6 @@ struct MenuBarControllerTests {
 
         perform(.enabled, in: controller)
         #expect(recorder.enabledValues == [false])
-
-        let slider = intensitySlider(in: controller)!
-        slider.doubleValue = 0.63
-        slider.sendAction(slider.action, to: slider.target)
-        #expect(recorder.intensities == [0.63])
 
         perform(.launchAtLogin, in: controller)
         #expect(recorder.loginValues == [true])
@@ -153,6 +161,7 @@ struct MenuBarControllerTests {
             ),
             actions: MenuBarActions(
                 menuDidOpen: { recorder.menuOpenCount += 1 },
+                setEffect: { recorder.effects.append($0) },
                 setEnabled: { recorder.enabledValues.append($0) },
                 setIntensity: { recorder.intensities.append($0) },
                 setLaunchAtLogin: { recorder.loginValues.append($0) },
@@ -185,17 +194,11 @@ struct MenuBarControllerTests {
         controller.menu.performActionForItem(at: index)
     }
 
-    private func intensitySlider(in controller: MenuBarController) -> NSSlider? {
-        item(.intensity, in: controller).view?.subviews.compactMap { $0 as? NSSlider }.first
-    }
-
-    private func intensityLabel(in controller: MenuBarController) -> NSTextField? {
-        item(.intensity, in: controller).view?.subviews.compactMap { $0 as? NSTextField }.first
-    }
 }
 
 @MainActor
 private final class ActionRecorder {
+    var effects: [DesktopEffect] = []
     var menuOpenCount = 0
     var enabledValues: [Bool] = []
     var intensities: [Double] = []
