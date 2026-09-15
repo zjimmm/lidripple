@@ -1,9 +1,9 @@
 # LidRipple — Product Requirements & Design
 
-**Status:** Implemented baseline with owner-approved product refinements; commercial release pending
-**Date:** 2026-09-12; updated 2026-09-14
+**Status:** Implemented baseline with owner-approved product refinements; public release pending
+**Date:** 2026-09-12; updated 2026-09-15
 **Owner:** Jim
-**Type:** macOS menu-bar app; proposed paid, one-time-purchase product
+**Type:** free, open-source macOS menu-bar app (MIT)
 
 ### Current product decisions (2026-09-14)
 
@@ -20,13 +20,12 @@
 - Approved app icon: pearl laptop-and-ripple emblem on a graphite rounded tile,
   `Packaging/AppIcon.png` / `AppIcon.icns`. The menu-bar icon is a simpler template
   folded-screen mark, not a miniature of the full app icon.
-- Proposed price: **₱149 one-time**, tentative. No checkout, trial, activation, or
-  entitlement system is implemented. Closed-source commercial distribution is the
-  intended direction, but the repository's existing MIT `LICENSE` is unchanged.
-  Licensing, third-party notices, payment costs, and distribution must be resolved
-  before sale. This document does not itself change license terms.
+- Open-source decision (2026-09-15): keep the existing MIT license and provide both
+  effects without payment, accounts, activation, or trials. This supersedes the
+  tentative ₱149 paid/proprietary proposal. Public-source review and secure release
+  distribution remain required; optional donations are not feature gates.
 - Original M0–M5 milestones below describe the engineering baseline, not proof that
-  all hardware, comparison-footage, notarization, or commercial release gates passed.
+  all hardware, comparison-footage, notarization, or public release gates passed.
 
 ---
 
@@ -147,7 +146,7 @@ next.
 
 - **Primary:** Casual MacBook owners who want to try the delightful fold they saw on
   iPhone Duo. They should not need to understand angles, springs, or capture pipelines.
-- **Purchase motivation:** a polished, affordable little delight with two distinct
+- **Motivation:** a polished little delight with two distinct
   effects and easy installation—not more settings than competitors.
 - **First-run requirement:** one short Screen Recording explanation followed by the
   required system permission flow. No calibration exercise. Preview works without capture.
@@ -466,7 +465,7 @@ The twelve cases that decide whether the app feels finished rather than like a d
   "needs permission" state with a deep link to the right Settings pane — never a silent
   no-op.
 - **No Accessibility permission. No Input Monitoring.** Stated prominently in the README;
-  a paid app must explain screen access just as clearly as an open-source one.
+  minimum permissions and clear disclosure are part of the open-source trust story.
 - **Captured frames never leave the GPU.** No disk writes, no network, no telemetry, no
   analytics. The app makes zero outbound connections.
 - **Capture duration is seconds per day**, only inside the sensitive lid band.
@@ -530,30 +529,27 @@ targets, not universal performance guarantees.
 
 ---
 
-## 14. Distribution and commercial direction
+## 14. Open-source distribution
 
-- **Proposed price:** ₱149 one-time purchase, not finalized. Both effects included;
-  no subscriptions, effect-pack upsells, or unnecessary account friction are planned.
-- **Positioning:** effortless delight for casual users. Free fold alternatives mean
-  a lower price alone is not differentiation. Lead with motion quality, polished
-  installation, clear permissions, and tasteful defaults.
-- **Licensing status:** repository currently contains MIT `LICENSE`. The owner intends
-  to explore closed-source sales. Resolve ownership, existing license obligations,
-  third-party notices, and customer terms before changing licensing or selling.
-- **Commercial work pending:** checkout provider, fee/tax review, final price/currency,
-  trial/refund policy, supported-device promise, delivery, license/device policy, and
-  support. A free trial is a proposal, not an implemented entitlement.
-- **Privacy:** current app has no telemetry or payment network integration. Any future
-  activation or update networking requires explicit design and privacy-policy updates;
-  it must not transmit screen captures.
-- **Channel:** target is a hardened-runtime, Developer ID signed and notarized DMG.
-  Current private GitHub Releases link is an engineering surface, not a completed
-  customer storefront. A public delivery/update destination is required before sale.
-- **Secondary:** existing Homebrew packaging is engineering infrastructure; public
-  availability depends on the final paid distribution model.
-- **Release copy:** explain sensor compatibility, permissions, lock-screen limitations,
-  and fresh-wake best effort. Use owned or permission-cleared demo footage. Do not claim
-  Apple affiliation, pixel-identical output, zero flicker, or unmeasured performance.
+- **Price and license:** free, MIT. Both Fold and Ripple included without accounts,
+  activation, trial limits, or paid feature packs. The owner reversed the commercial
+  proposal on 2026-09-15. Existing MIT terms remain unchanged.
+- **Channel:** public source and GitHub Releases with a hardened-runtime, Developer ID
+  signed and notarized DMG. Review source/history for sensitive material before
+  making the currently private repository public. Owner authorized publication once
+  the required checks pass.
+- **Secondary:** Homebrew cask, verified against the exact final DMG checksum.
+- **Costs:** release signing/distribution may incur maintainer costs; optional donations
+  must not interrupt installation or gate effects.
+- **Privacy:** no telemetry or activation. Captures stay local; document any future
+  update networking explicitly. Browser links to releases are not an in-app updater.
+- **Community:** provide fresh-clone build instructions, contribution guidance, and
+  private security reporting. Audit source, history, assets, and third-party notices.
+- **Release copy:** explain sensor compatibility, permissions, and post-unlock-only
+  effects. No Apple affiliation, pixel-identical, zero-flicker, or unmeasured claims.
+- **Physical acceptance:** on 2026-09-15 Jim confirmed physical lid tests are all OK
+  and asked not to repeat them. Record this as owner attestation, not new instrumentation.
+  It does not prove sensor-less behavior or authorize footage redistribution.
 
 ---
 
@@ -589,8 +585,8 @@ freshness from band width.
    GIF.
 6. **M5 — Ship.** Safe experimental sensor-less mode (visible close best-effort, not a
    v1 guarantee), menu bar, onboarding, notarization, README, cask, `LICENSE` file
-   (current MIT status, §14). This is the original engineering milestone; commercial
-   checkout, licensing, support, and public release qualification remain separate work.
+   (current MIT status, §14). This is the original engineering milestone; public
+   source readiness, support, and release qualification remain separate work.
    Physical sensor-less qualification is tracked after v1.
 
 ---
@@ -599,7 +595,7 @@ freshness from band width.
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Project identity | LidRipple, Swift + Metal, proposed affordable one-time purchase | Casual-user delight; current MIT license remains until an explicit licensing decision |
+| Project identity | LidRipple, Swift + Metal, free and open source | Casual-user delight under the existing MIT license |
 | Motion model | Angle-locked with spring momentum | Viscous slow closes, continuous reversal, jitter immunity — all three from one mechanism |
 | Fold axis | Non-rigid squash into the bottom hinge | Honors real lid physics while keeping Duo's signature of pixels being consumed, not rotated |
 | Opening half | Angle-tracked reversal; conditional fresh sensor-paced reveal after unlock | Preserve lid coupling and privacy; frost reduces handoff visibility, late reveals skip |

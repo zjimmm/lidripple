@@ -1,4 +1,4 @@
-# Releasing lidripple
+# Releasing LidRipple
 
 This is a maintainer procedure. A CI build or ad-hoc signature is not a release. The
 published DMG must be a universal, hardened-runtime, Developer ID–signed artifact that
@@ -19,10 +19,10 @@ Prefer a keychain profile created interactively:
 ```sh
 xcrun notarytool store-credentials lidripple-notary \
   --apple-id YOUR_APPLE_ID \
-  --team-id YOUR_TEAM_ID \
-  --password YOUR_APP_SPECIFIC_PASSWORD
+  --team-id YOUR_TEAM_ID
 ```
 
+Enter the app-specific password only at the secure interactive prompt.
 Never paste secrets into a shell script, commit them, add them to a command transcript,
 or run the release scripts under shell tracing (`set -x`). Redact Apple IDs, team IDs,
 key IDs, issuer IDs, certificate serials, and notarization submission IDs from public
@@ -62,7 +62,7 @@ uploading the asset. A different byte sequence is a different release candidate.
    no-sleep clamshell close may be undetectable. Only consider a future visible close
    best-effort after a supported early trigger is measured while the built-in panel
    can still display frames. Do not delay forced sleep or draw over `loginwindow`.
-2. Confirm the public copyright name and active GitHub Sponsors profile.
+2. Confirm the public copyright name. Sponsorship is optional, not a release gate.
 3. From a clean, synchronized `main`, run the automated gates:
 
    ```sh
@@ -81,7 +81,7 @@ uploading the asset. A different byte sequence is a different release candidate.
 
    ```sh
    scripts/sign-and-notarize.sh \
-     --app dist/lidripple.app \
+     --app dist/LidRipple.app \
      --identity "Developer ID Application: YOUR NAME (TEAMID)" \
      --keychain-profile lidripple-notary \
      --output dist/lidripple-1.0.0.dmg
@@ -94,7 +94,7 @@ uploading the asset. A different byte sequence is a different release candidate.
 
    ```sh
    scripts/verify-release.sh \
-     --app dist/lidripple.app \
+     --app dist/LidRipple.app \
      --dmg dist/lidripple-1.0.0.dmg
    ```
 
@@ -116,14 +116,14 @@ uploading the asset. A different byte sequence is a different release candidate.
    https://github.com/zjimmm/lidripple/releases/download/v1.0.0/lidripple-1.0.0.dmg
    ```
 
-   The cask must require Sonoma or later, install `lidripple.app`, and limit zap cleanup
+   The cask must require Sonoma or later, install `LidRipple.app`, and limit zap cleanup
    to `com.lidripple.app` preferences and lidripple's own login-item state.
 
 7. Verify the cask metadata against the same local artifact:
 
    ```sh
    scripts/verify-release.sh \
-     --app dist/lidripple.app \
+     --app dist/LidRipple.app \
      --dmg dist/lidripple-1.0.0.dmg \
      --cask Casks/lidripple.rb
    brew style Casks/lidripple.rb

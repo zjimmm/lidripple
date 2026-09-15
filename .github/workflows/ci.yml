@@ -36,8 +36,8 @@ jobs:
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           plutil -lint Packaging/Info.plist Packaging/lidripple.entitlements
           test "$(plutil -extract CFBundleIdentifier raw Packaging/Info.plist)" = "com.lidripple.app"
-          test "$(plutil -extract CFBundleDisplayName raw Packaging/Info.plist)" = "lidripple"
-          test "$(plutil -extract CFBundleName raw Packaging/Info.plist)" = "lidripple"
+          test "$(plutil -extract CFBundleDisplayName raw Packaging/Info.plist)" = "LidRipple"
+          test "$(plutil -extract CFBundleName raw Packaging/Info.plist)" = "LidRipple"
           test "$(plutil -extract CFBundleExecutable raw Packaging/Info.plist)" = "lidripple"
           test "$(plutil -extract CFBundlePackageType raw Packaging/Info.plist)" = "APPL"
           test "$(plutil -extract CFBundleIconFile raw Packaging/Info.plist)" = "AppIcon"

@@ -59,8 +59,8 @@ actual_dmg_hash="$(shasum -a 256 "$dmg" | awk '{ print $1 }')"
 
 plutil -lint "$info"
 [[ "$(plutil -extract CFBundleIdentifier raw "$info")" == "com.lidripple.app" ]]
-[[ "$(plutil -extract CFBundleDisplayName raw "$info")" == "lidripple" ]]
-[[ "$(plutil -extract CFBundleName raw "$info")" == "lidripple" ]]
+[[ "$(plutil -extract CFBundleDisplayName raw "$info")" == "LidRipple" ]]
+[[ "$(plutil -extract CFBundleName raw "$info")" == "LidRipple" ]]
 [[ "$(plutil -extract CFBundleExecutable raw "$info")" == "lidripple" ]]
 [[ "$(plutil -extract CFBundlePackageType raw "$info")" == "APPL" ]]
 [[ "$(plutil -extract CFBundleIconFile raw "$info")" == "AppIcon" ]]

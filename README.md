@@ -6,7 +6,8 @@
 > release gates have passed. Physical qualification on a genuinely sensor-less Mac
 > is separately tracked after v1.
 
-lidripple is a native macOS menu-bar agent that turns closing a MacBook lid into a
+LidRipple is a free, open-source native macOS menu-bar app with Fold and Ripple
+effects. No accounts, activation, trials, or paid presets. It turns closing a MacBook lid into a
 screen-fold animation. A physical lid-angle sensor drives the effect when the hardware
 exposes one. Without a validated sensor, the app is designed to seal safely on sleep
 and can provide a fresh scripted unfold after unlock when the session and Screen
@@ -28,6 +29,10 @@ lawfully redistributable reference is available and the runtime-timed result pas
 human fidelity review. It is intentionally not represented by a placeholder.
 
 ## Requirements and compatibility
+
+Contributors: see [CONTRIBUTING.md](CONTRIBUTING.md). For sensitive reports, see
+[SECURITY.md](SECURITY.md). Public release progress is tracked in the
+[release checklist](docs/verification/2026-09-15-release-checklist.md).
 
 - macOS 14 Sonoma or later
 - A built-in display
