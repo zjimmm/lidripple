@@ -1,7 +1,7 @@
 # LidRipple
 
-> **Pre-release status:** implementation is in progress. The frame-matched M4 Duo
-> comparison GIF, notarized v1.0.0 artifact, Homebrew cask, and v1 sensor-less
+> **Pre-release status:** release verification is in progress. The
+> notarized v1.0.0 download, Homebrew cask, and v1 sensor-less
 > safety acceptance (S7) are not yet available. This repository does not claim those
 > release gates have passed. Physical qualification on a genuinely sensor-less Mac
 > is separately tracked after v1.
@@ -23,10 +23,12 @@ Sensor-less Macs use the timed reveal. The app cannot show the part of an openin
 that happens before macOS unlocks the desktop.
 
 The checked-in [M4 evidence](docs/fidelity/README.md) records reference provenance,
-timing analysis, local artifact hashes, and the remaining acceptance gaps. The required
+timing analysis, local artifact hashes, and the remaining acceptance gaps. The deferred
 side-by-side artifact will be placed at `docs/fidelity/duo-comparison.gif` only after a
 lawfully redistributable reference is available and the runtime-timed result passes
 human fidelity review. It is intentionally not represented by a placeholder.
+On 2026-09-15, the owner accepted the current visuals and deferred this comparison
+for v1. LidRipple does not claim pixel-identical reference fidelity.
 
 ## Requirements and compatibility
 
@@ -149,7 +151,7 @@ M3 lifecycle evidence is recorded in the
 [integration matrix](docs/verification/2026-09-12-m3-manual-matrix.md).
 The [M4 fidelity report](docs/fidelity/report.json) records measurements from before
 the 2026-09-13 retained-content renderer revision; it must be rerun for this candidate.
-The comparison artifact remains a release gate until it is lawful to publish and accepted.
+The owner deferred the comparison artifact for v1; exact reference parity remains unverified.
 
 ## Build and test
 

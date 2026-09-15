@@ -150,8 +150,10 @@ valid sensor-less test merely because of its model name.
 
 - [ ] Record a short owner-created real-device demo of both closing and opening effects.
 - [ ] Use only owned/licensed artwork and permission-cleared footage.
-- [ ] Resolve PRD S6: provide the rights-cleared reference comparison, or explicitly
+- [x] Resolve PRD S6: provide the rights-cleared reference comparison, or explicitly
   revise/waive that criterion with Jim. Visual approval is not frame-matched proof.
+  Owner explicitly deferred the comparison for v1 on 2026-09-15 and accepted the
+  current visuals. No pixel-identical claims or Apple footage redistribution.
 - [ ] Explain sensor requirements, Screen Recording, post-unlock-only effects, and
   best-effort wake behavior before download. No promise of lock-screen animation.
 - [ ] No Apple affiliation, pixel-identical, universal compatibility, or zero-flicker claims.
@@ -169,6 +171,22 @@ valid sensor-less test merely because of its model name.
   spending effort on new effects.
 
 ## Evidence and related documents
+
+### Candidate verification, 2026-09-15
+
+- App source candidate: `160beac7424d4f3ada58cb5ed1cea42843a5c704`, version/build `1.0.0`.
+- Clean candidate universal app built with arm64 and x86_64 slices.
+- Local warnings-as-errors test run: 310 tests passed. Release build passed.
+- GitHub CI run `34985698779`: success, including test and packaging gates.
+- CI previously exposed a shared-worker scheduling timeout in a blocking cancellation
+  test. Dedicated test threads and guaranteed delivery cleanup corrected the harness;
+  production animation code was not changed.
+- Developer ID signature verified. App submitted to Apple; notarization was still
+  `In Progress` at this checkpoint. No accepted/stapled artifact is claimed yet.
+- Common secret-pattern scan across reachable history found no matching key material
+  or token patterns. Filename scan found no committed private reference movies/GIFs
+  or certificate/key files. These focused scans are not a comprehensive security audit.
+- Subsequent comparison-deferral documentation does not change the app executable.
 
 - [Current PRD](../superpowers/specs/2026-09-12-lidripple-design.md)
 - [Original M5 release matrix](2026-09-12-m5-release-matrix.md)

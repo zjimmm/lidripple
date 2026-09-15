@@ -44,7 +44,9 @@ uploading the asset. A different byte sequence is a different release candidate.
 
 ## Release sequence
 
-1. Confirm M4/S6's comparison GIF/provenance/human approval and every applicable v1 M5
+1. S6's reference comparison was explicitly deferred for v1 by the owner on
+   2026-09-15; use owner visual acceptance without reference-parity claims or
+   redistribution of private footage. Confirm every applicable v1 M5
    row in `docs/verification/2026-09-12-m5-release-matrix.md`. S7 for v1 is an
    **automated safe-degradation gate**: no-HID selection and bounded recovery,
    resource/timer cleanup, immediate sleep seal, fresh post-unlock frame subject to

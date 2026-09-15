@@ -63,6 +63,10 @@ separate image that could make the two sides incomparable.
 
 ## Publication gate
 
+Owner decision, 2026-09-15: defer S6 for v1 and use the owner's current visual
+approval as product acceptance. This does not mark the comparison complete or grant
+rights to publish reference media. No pixel-identical claims are made.
+
 S6 is not marked complete until a lawful reference can appear in the repository. Once
 permission or project-owned real-device footage exists, rerun the exact command, verify
 the generated hashes, visually approve the GIF, and place it at

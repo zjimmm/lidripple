@@ -521,9 +521,10 @@ part of the product, and one piece of it comes first.
 | S6 | Fidelity to the original | Frame-matched side-by-side against real iPhone Duo footage — blur onset, retained-content/hinge-shadow progression, total duration at subjective parity — committed to the repo as a GIF |
 | S7 (v1) | Sensor-less mode degrades safely | Automated no-HID selection/recovery, idle ownership, immediate sleep seal, fresh post-unlock capture/unfold, permission handling, and accurate limited-mode copy. Physical sensor-less behavior and a visible close are unverified post-v1 qualifications, not v1 pass criteria. |
 
-S6 remains an unfulfilled reference-comparison gate unless rights-cleared footage and
-the comparison artifact are recorded. Owner acceptance of the current visuals is the
-product baseline, not evidence of exact reference parity. Do not redistribute Apple or
+On 2026-09-15, the owner explicitly deferred S6's reference comparison for v1 and
+accepted the current visuals as the v1 product baseline. S6 is not measured or passed;
+it is a post-v1 comparison, not a v1 release blocker. Make no pixel-identical claims.
+Owner approval is not evidence of exact reference parity. Do not redistribute Apple or
 third-party footage without permission. Frame-time targets above remain qualification
 targets, not universal performance guarantees.
 
