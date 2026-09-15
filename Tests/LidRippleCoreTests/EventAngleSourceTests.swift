@@ -93,27 +93,31 @@ import Testing
     let cancelStarted = DispatchSemaphore(value: 0)
     let cancelReturned = DispatchSemaphore(value: 0)
     let sink = EventSampleSink()
+    // This test deliberately blocks delivery. Dedicated threads avoid starving
+    // dispatch's shared pool while the parallel test runner is also waiting.
+    // Always release delivery if a prerequisite assertion throws.
+    defer { release.signal() }
     try source.start { sample in
         entered.signal()
-        _ = release.wait(timeout: .now() + 2)
+        release.wait()
         sink.append(sample)
     }
 
-    DispatchQueue.global().async {
+    Thread.detachNewThread {
         source.beginClose()
         beginReturned.signal()
     }
-    #expect(entered.wait(timeout: .now() + 2) == .success)
-    DispatchQueue.global().async {
+    try #require(entered.wait(timeout: .now() + 10) == .success)
+    Thread.detachNewThread {
         cancelStarted.signal()
         source.cancelTransition()
         cancelReturned.signal()
     }
-    #expect(cancelStarted.wait(timeout: .now() + 2) == .success)
+    try #require(cancelStarted.wait(timeout: .now() + 10) == .success)
     #expect(cancelReturned.wait(timeout: .now() + 0.05) == .timedOut)
     release.signal()
-    #expect(cancelReturned.wait(timeout: .now() + 2) == .success)
-    #expect(beginReturned.wait(timeout: .now() + 2) == .success)
+    try #require(cancelReturned.wait(timeout: .now() + 10) == .success)
+    try #require(beginReturned.wait(timeout: .now() + 10) == .success)
     #expect(sink.samples.count == 1)
     #expect(scheduler.activeTaskCount == 0)
     scheduler.tasks.forEach { $0.fireEvenIfCancelled() }
