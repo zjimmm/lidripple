@@ -118,6 +118,12 @@ plutil -lint "$entitlements"
 
 bundle_files="$(find "$app" \( -type f -o -type l \) -print | sed "s|$app/||" | LC_ALL=C sort)"
 expected_bundle_files=$'Contents/Info.plist\nContents/MacOS/lidripple\nContents/PkgInfo\nContents/Resources/AppIcon.icns\nContents/_CodeSignature/CodeResources'
+# Apple's stapler adds its ticket here (distinct from the signature resource
+# envelope below _CodeSignature). Require a regular file, and validate the ticket
+# with stapler below; do not broadly permit arbitrary additional bundle files.
+if [[ -f "$app/Contents/CodeResources" && ! -L "$app/Contents/CodeResources" ]]; then
+    expected_bundle_files=$'Contents/CodeResources\n'"$expected_bundle_files"
+fi
 [[ "$bundle_files" == "$expected_bundle_files" ]] || {
     echo "App contains files outside the documented bundle set:" >&2
     echo "$bundle_files" >&2
