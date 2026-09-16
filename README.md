@@ -101,6 +101,9 @@ from capture. One frame is retained ephemerally for GPU rendering, then released
 - No app-owned network connection
 - No telemetry or analytics
 - No captured pixels written to disk, preferences, diagnostics, or logs
+- Preferences and pixel-free diagnostic logs may be stored locally. Captured frames
+  and derived rendering textures are released when no longer needed; this is not
+  a promise of secure memory erasure.
 - No App Sandbox entitlement; distribution therefore uses Developer ID rather than the
   Mac App Store
 
@@ -111,6 +114,10 @@ Security → Screen & System Audio Recording**, then reactivate the app.
 
 Protected or DRM video may produce a black captured region. lidripple preserves that
 black result and never tries to bypass content protection.
+
+If macOS cannot confirm the unlocked session, background wake/unlock events do not
+authorize capture. After unlocking, open LidRipple's menu to resume effects in that
+case. This conservative fallback may skip the automatic opening animation.
 
 ## Install
 

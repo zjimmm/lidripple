@@ -330,20 +330,26 @@ struct AppCoordinatorTests {
         #expect(harness.input.sessionRestricted)
     }
 
-    @Test func explicitUnlockWorksWhenPrivateLockKeyIsMissingButConsoleIsKnown() async {
+    @Test func backgroundUnlockCannotAuthorizeUnknownLockState() async {
         let harness = makeHarness(permissionGranted: true)
         harness.coordinator.start(sessionAccess: .restricted)
         harness.sessionAccess.value = .unknown
         await harness.coordinator.screenDidUnlock(sessionAccess: .unknown, onConsole: true)
-        #expect(harness.events.values.contains("fresh-unfold"))
-        #expect(harness.input.startCount == 1)
+        #expect(!harness.events.values.contains("fresh-unfold"))
+        #expect(harness.input.startCount == 0)
+        #expect(harness.input.sessionRestricted)
+        // A forged/stale active payload also cannot override current uncertainty.
+        await harness.coordinator.screenDidUnlock(sessionAccess: .active, onConsole: true)
+        #expect(harness.lifecycle.unlockCount == 0)
+        #expect(harness.input.startCount == 0)
     }
 
-    @Test func ambiguousWakeAndActivationCannotCancelAnExplicitUnfold() async {
+    @Test func ambiguousWakeAndActivationCannotCancelMenuAuthorizedUnfold() async {
         let harness = makeHarness(permissionGranted: true)
         harness.coordinator.start(sessionAccess: .restricted)
         harness.sessionAccess.value = .unknown
-        await harness.coordinator.screenDidUnlock(sessionAccess: .unknown, onConsole: true)
+        harness.coordinator.menuDidOpen()
+        for _ in 0..<100 where harness.animation.activeCount == 0 { await Task.yield() }
         #expect(harness.animation.activeCount == 1)
 
         await harness.coordinator.systemDidWake(sessionAccess: .unknown)
@@ -454,8 +460,8 @@ struct AppCoordinatorTests {
         }
         #expect(harness.lifecycle.isWaitingForUnlock)
         harness.coordinator.systemWillSleep()
-        harness.sessionAccess.value = .unknown
-        await harness.coordinator.screenDidUnlock(sessionAccess: .unknown, onConsole: true)
+        harness.sessionAccess.value = .active
+        await harness.coordinator.screenDidUnlock(sessionAccess: .active, onConsole: true)
         harness.lifecycle.holdUnlock = false
         harness.lifecycle.releaseUnlock()
         await oldUnlock.value
@@ -478,8 +484,8 @@ struct AppCoordinatorTests {
         }
         #expect(harness.lifecycle.isWaitingForUnlock)
         harness.coordinator.systemWillSleep()
-        harness.sessionAccess.value = .unknown
-        await harness.coordinator.screenDidUnlock(sessionAccess: .unknown, onConsole: true)
+        harness.sessionAccess.value = .active
+        await harness.coordinator.screenDidUnlock(sessionAccess: .active, onConsole: true)
         harness.sessionAccess.onConsole = false
         await harness.coordinator.screenDidUnlock(sessionAccess: .unknown, onConsole: false)
         harness.sessionAccess.onConsole = true

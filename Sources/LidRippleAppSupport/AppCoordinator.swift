@@ -508,10 +508,11 @@ public final class AppCoordinator: DebugScrubberSession {
     ) async {
         guard notificationGeneration == nil
                 || notificationGeneration == sessionRestrictionGeneration else { return }
-        // This explicit unlock signal can authorize the public on-console
-        // evidence when macOS omits its private lock-state dictionary key.
-        guard onConsole, sessionAccess != .restricted,
-              isExplicitUnlockAuthorizedNow() else {
+        // Distributed notifications are hints, not authenticated unlock proof.
+        // Never promote an unknown lock state using a background notification.
+        // The separate, direct status-menu interaction remains the fallback.
+        guard onConsole, sessionAccess == .active,
+              isCurrentConsoleNow(), sessionAccessNow() == .active else {
             restrictSession(lockLifecycle: true)
             refreshMenu()
             return
@@ -520,7 +521,7 @@ public final class AppCoordinator: DebugScrubberSession {
             pendingExplicitUnlock = true
             return
         }
-        await unlockAndRestoreRuntime(explicitUnlock: true)
+        await unlockAndRestoreRuntime()
     }
 
     public func sessionResignedActive() {

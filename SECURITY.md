@@ -5,9 +5,14 @@ unintended capture, stale content after locking, or session-boundary failures sh
 be handled privately.
 
 Use the repository's **Security → Report a vulnerability** entry when available.
+The direct reporting URL is
+https://github.com/zjimmm/lidripple/security/advisories/new.
 Do not create a public issue containing sensitive reproduction details or captures.
-Private reporting must be enabled before public release; until then, ask the
-maintainer for a private contact without posting the vulnerability itself.
+GitHub private vulnerability reporting requires a public repository. During the
+publication transition, the maintainer must enable and verify this route before
+announcing the release. While the repository remains private, coordinate directly
+with the maintainer through your existing private collaboration channel; do not
+post vulnerability details in a public issue if the reporting URL is unavailable.
 
 Include the affected app/macOS versions, hardware, reproduction steps, and expected
 behavior. Remove personal information, credentials, and private screen content.

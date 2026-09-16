@@ -55,8 +55,9 @@ public final class NativeScreenRecordingOnboardingPresenter:
         alert.messageText = "Allow Screen Recording for the fold effect?"
         alert.informativeText = """
         LidRipple briefly captures only the built-in display and excludes its own \
-        overlay. It keeps one frame in GPU memory, writes nothing to disk, and sends \
-        nothing over the network. It does not need Accessibility or Input Monitoring.
+        overlay. Captured pixels are processed temporarily in memory and are not \
+        saved or transmitted by the app. Preferences and pixel-free diagnostic logs \
+        may be stored locally. It does not need Accessibility or Input Monitoring.
         """
         alert.alertStyle = .informational
         alert.addButton(withTitle: "Continue")

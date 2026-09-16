@@ -2,3 +2,20 @@
 .swiftpm/
 .DS_Store
 dist/
+
+# Local credentials and signing exports must never enter source control.
+.env
+.env.*
+!.env.example
+!.env.sample
+*.p12
+*.pfx
+*.p8
+*.pem
+*.key
+*.keychain
+*.keychain-db
+*.mobileprovision
+*.provisionprofile
+credentials.local.*
+secrets.local.*
