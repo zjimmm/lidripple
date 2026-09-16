@@ -99,7 +99,9 @@ submit_and_require_accepted() {
     local status
 
     xcrun notarytool submit "$artifact" "${notary_args[@]}" --wait --output-format json > "$result"
-    status="$(awk -F'"' '/"status"[[:space:]]*:/ { print $4; exit }' "$result")"
+    # notarytool may emit compact JSON with message/id before status. Parse the
+    # named key rather than depending on field order or pretty-print formatting.
+    status="$(plutil -extract status raw -o - "$result")"
     [[ "$status" == "Accepted" ]] || {
         echo "Notarization did not reach Accepted status for $(basename "$artifact"): ${status:-unknown}" >&2
         exit 1
