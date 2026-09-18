@@ -1,5 +1,8 @@
 # Pre-publication security cleanup
 
+Historical checkpoint; see the [September 19 source migration](2026-09-19-source-migration.md)
+for the approved replacement-repository strategy and current staging status.
+
 Owner approved remediation and noreply history rewriting on 2026-09-16.
 Repository remains private; no GitHub release has been published.
 
