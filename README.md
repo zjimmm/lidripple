@@ -1,10 +1,15 @@
 # LidRipple
 
-> **Pre-release status:** release verification is in progress. The
-> notarized v1.0.0 download, Homebrew cask, and v1 sensor-less
-> safety acceptance (S7) are not yet available. This repository does not claim those
-> release gates have passed. Physical qualification on a genuinely sensor-less Mac
-> is separately tracked after v1.
+**A little delight every time you open your MacBook.**
+
+Fold and Ripple effects that follow your lid. Free and open source.
+
+**[Download LidRipple for macOS](https://github.com/zjimmm/lidripple/releases/latest)**
+
+Requires macOS 14 Sonoma or later and a built-in display. Download the `.dmg`
+under **Assets**, not the source-code archive. See [Install](#install) below.
+Lid-angle hardware is needed for lid-following effects. Effects do not run over
+the lock screen; sensor-less behavior remains experimental and unverified.
 
 LidRipple is a free, open-source native macOS menu-bar app with Fold and Ripple
 effects. No accounts, activation, trials, or paid presets. It turns closing a MacBook lid into a
@@ -38,8 +43,9 @@ Contributors: see [CONTRIBUTING.md](CONTRIBUTING.md). For sensitive reports, see
 
 - macOS 14 Sonoma or later
 - A built-in display
-- Screen Recording permission for the fold effect
-- Apple Silicon or Intel (the universal artifact remains a release verification gate)
+- Screen Recording permission for Fold and Ripple
+- Apple Silicon or Intel (universal app; physical acceptance was reported on M4/M2,
+  not every supported architecture or MacBook model)
 
 | Mac | Input mode | Current status and caveat |
 |---|---|---|
@@ -121,15 +127,21 @@ case. This conservative fallback may skip the automatic opening animation.
 
 ## Install
 
-There is no published release yet. When the v1.0.0 gates pass, installation will be:
+1. Open [Releases](https://github.com/zjimmm/lidripple/releases/latest) and download
+   `lidripple-1.0.0.dmg` from **Assets**.
+2. Open the DMG and drag **LidRipple** into **Applications**.
+3. Launch **LidRipple** from Applications. Use its menu-bar icon to select Fold or
+   Ripple and follow the Screen Recording permission explanation. If macOS asks,
+   quit and reopen after granting permission.
 
-1. Download the notarized `lidripple-1.0.0.dmg` and its SHA-256 file from the matching
-   GitHub Release.
-2. Verify the checksum, open the DMG, and drag `LidRipple.app` to Applications.
-3. Launch the app and follow its Screen Recording explanation.
+The app and DMG are Developer ID signed and notarized by Apple. There is no need
+to disable Gatekeeper or run a quarantine-removal command.
 
-A Homebrew cask will be added only after it can name that exact immutable DMG and exact
-SHA-256; this project never uses `sha256 :no_check`.
+For optional download verification, download the adjacent `.dmg.sha256` file into
+the same folder and run `shasum -a 256 -c lidripple-1.0.0.dmg.sha256` there.
+
+Version 1 is distributed as a DMG only. Homebrew support and its installation/
+uninstallation checks are deferred; no supported Homebrew install command is offered.
 
 To uninstall, turn off Launch at Login in lidripple, quit it, and move
 `/Applications/LidRipple.app` to Trash. Remove the app's preferences only if you also

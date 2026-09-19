@@ -67,7 +67,7 @@ cask "lidripple" do
 
   app "LidRipple.app"
 
-  uninstall quit: "com.lidripple.app",
+  uninstall quit:       "com.lidripple.app",
             login_item: "LidRipple"
 
   zap trash: "~/Library/Preferences/com.lidripple.app.plist"

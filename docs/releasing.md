@@ -44,6 +44,14 @@ uploading the asset. A different byte sequence is a different release candidate.
 
 ## Release sequence
 
+**v1 DMG-only exception (owner approved 2026-09-19):** Homebrew distribution and
+cask audit/install/reinstall/uninstall/zap gates are deferred. Do not publish a
+cask or advertise Homebrew support. App/DMG signature, notarization, integrity,
+launch and post-upload checksum gates remain mandatory. The existing candidate
+passed exact cask checksum validation locally before that temporary cask was
+removed; the artifact itself is unchanged. Future Homebrew releases must complete
+the full procedure below.
+
 1. S6's reference comparison was explicitly deferred for v1 by the owner on
    2026-09-15; use owner visual acceptance without reference-parity claims or
    redistribution of private footage. Confirm every applicable v1 M5
