@@ -25,4 +25,10 @@ sanitized history through a new repository on 2026-09-19.
 - Publishing the source is not publishing the app binary. The notarized candidate
   still needs the remaining release packaging/install checks before a GitHub Release.
 
-This staging record does not claim public visibility or a published binary release.
+## Publication completed
+
+On 2026-09-19, after the owner accepted the disclosed identity metadata and
+approved DMG-only distribution, the new source repository was made public and
+private vulnerability reporting was enabled. Release v1.0.0 was published after
+CI passed; its anonymous download checksum was verified. See the
+[DMG publication record](2026-09-19-dmg-release.md). The original archive remains private.

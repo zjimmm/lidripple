@@ -1,7 +1,17 @@
 # DMG publication checkpoint
 
-Publication remains pending; neither source visibility nor a GitHub Release was
-changed during this verification pass.
+LidRipple 1.0.0 was published on 2026-09-19 as a DMG-only release.
+Source is public; the original repository remains privately archived.
+
+## Publication result
+
+- Tag `v1.0.0`: `f7402616ecfcf4a170698df476c7b1870ba8e920`.
+- CI run `35409062483` passed, including secret scanning, warnings-as-errors tests,
+  release build, and universal app/DMG packaging.
+- Release: https://github.com/zjimmm/lidripple/releases/tag/v1.0.0
+- Anonymous download of the published DMG and sidecar passed SHA-256 verification.
+- GitHub private vulnerability reporting is enabled.
+- No artifact rebuild, re-sign, or replacement occurred during publication.
 
 ## Verified
 
@@ -25,5 +35,5 @@ changed during this verification pass.
   The temporary generated cask was removed; no Homebrew support is advertised.
 - Existing owner waiver covers repeat physical lid testing; it is not represented
   as fresh-profile permission, login-item or Homebrew acceptance evidence.
-- Public download, source visibility, vulnerability-reporting activation and
-  post-upload checksum verification remain pending.
+- Physical tests were not repeated. Homebrew and fresh-profile acceptance are
+  not claimed by this publication record.
