@@ -7,6 +7,33 @@ import LidRippleIntegration
 @Suite(.serialized)
 @MainActor
 struct AppCoordinatorTests {
+    @Test func registryUnlockRestartsTrackingAcrossRepeatedFullSleep() async {
+        let harness = makeHarness(permissionGranted: true)
+        harness.coordinator.start(sessionAccess: .active)
+        for cycle in 1...3 {
+            harness.coordinator.systemWillSleep()
+            harness.sessionAccess.value = .resolve(onConsole: true, screenLocked: nil,
+                                                   consoleLocked: true)
+            await harness.coordinator.systemDidWake(sessionAccess: .restricted)
+            #expect(harness.input.sessionRestricted)
+            #expect(harness.lifecycle.unlockCount == cycle - 1)
+            harness.sessionAccess.value = .resolve(onConsole: true, screenLocked: nil,
+                                                   consoleLocked: false)
+            await harness.coordinator.screenDidUnlock(sessionAccess: .active, onConsole: true)
+            #expect(harness.lifecycle.unlockCount == cycle)
+            #expect(!harness.input.sessionRestricted)
+            #expect(harness.input.isEnabled)
+        }
+    }
+
+    @Test func menuRefreshesPermissionWithoutAnotherSystemPrompt() {
+        let harness = makeHarness(permissionGranted: false)
+        harness.coordinator.start(sessionAccess: .active)
+        #expect(!harness.input.isEnabled)
+        harness.permissionService.preflightResult = true
+        harness.coordinator.menuDidOpen()
+        #expect(harness.input.isEnabled)
+    }
     @Test func samplesDuringFreshCaptureAreBufferedWithoutDrivingAnimation() async {
         let harness = makeHarness(permissionGranted: true)
         harness.lifecycle.holdUnlock = true

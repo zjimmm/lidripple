@@ -225,13 +225,7 @@ public final class AppCoordinator: DebugScrubberSession {
             ProcessInfo.processInfo.systemUptime
         },
         sessionAccessNow: @escaping @MainActor () -> ConsoleSessionAccess = {
-            guard let values = CGSessionCopyCurrentDictionary() as? [String: Any] else {
-                return .unknown
-            }
-            return .resolve(
-                onConsole: values["kCGSSessionOnConsoleKey"] as? Bool,
-                screenLocked: values["CGSSessionScreenIsLocked"] as? Bool
-            )
+            SystemConsoleSession.snapshot().access
         },
         isCurrentConsoleNow: @escaping @MainActor () -> Bool = {
             guard let values = CGSessionCopyCurrentDictionary() as? [String: Any] else {
@@ -442,6 +436,9 @@ public final class AppCoordinator: DebugScrubberSession {
     /// Opening this user's own status menu proves the desktop is interactive
     /// without granting an unknown background session capture authority.
     public func menuDidOpen() {
+        // Menu-bar apps do not necessarily receive an activation callback after
+        // System Settings changes TCC. Refresh without presenting a prompt.
+        applicationDidBecomeActive()
         guard isStarted, !isTerminating, sessionRestricted,
               sessionAccessNow() == .unknown,
               isCurrentConsoleNow() else { return }

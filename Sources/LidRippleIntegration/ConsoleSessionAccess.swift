@@ -1,6 +1,5 @@
-/// Pure interpretation of the CoreGraphics session dictionary. The screen-lock
-/// key is present on current macOS but is not declared in the public Swift SDK,
-/// so absence remains explicit rather than being mistaken for "unlocked".
+/// Combines session ownership with explicit lock evidence. Neither an absent
+/// dictionary key nor a distributed notification counts as unlocked evidence.
 public enum ConsoleSessionAccess: Equatable, Sendable {
     case active
     case restricted
@@ -8,10 +7,15 @@ public enum ConsoleSessionAccess: Equatable, Sendable {
 
     public static func resolve(
         onConsole: Bool?,
-        screenLocked: Bool?
+        screenLocked: Bool?,
+        consoleLocked: Bool? = nil
     ) -> ConsoleSessionAccess {
-        if onConsole == false || screenLocked == true { return .restricted }
-        if onConsole == true, screenLocked == false { return .active }
+        if onConsole == false || screenLocked == true || consoleLocked == true {
+            return .restricted
+        }
+        if onConsole == true, screenLocked == false || consoleLocked == false {
+            return .active
+        }
         return .unknown
     }
 }

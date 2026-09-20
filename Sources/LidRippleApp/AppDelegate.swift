@@ -205,7 +205,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                   generation == eventCoordinator.sessionEventGeneration else { return }
             // Allow the lock-state dictionary to catch up with the public
             // notification, while the generation binds it to this event.
-            let session = self.currentSessionSnapshot()
+            var session = self.currentSessionSnapshot()
+            // Unlock delivery can precede registry propagation. Bound the wait,
+            // and never let an intervening lock/sleep authorize a stale event.
+            for _ in 0..<10 where session.access != .active {
+                do { try await Task.sleep(for: .milliseconds(50)) }
+                catch { return }
+                guard generation == eventCoordinator.sessionEventGeneration else { return }
+                session = self.currentSessionSnapshot()
+            }
             self.wakeLog.notice(
                 "screenDidUnlock access=\(String(describing: session.access), privacy: .public) onConsole=\(session.onConsole)"
             )
@@ -248,17 +256,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Read both predicates from one dictionary so a fast lock/switch cannot
     /// produce an internally inconsistent unlock-notification snapshot.
     private func currentSessionSnapshot() -> (access: ConsoleSessionAccess, onConsole: Bool) {
-        guard let dictionary = CGSessionCopyCurrentDictionary() as? [String: Any] else {
-            return (.unknown, false)
-        }
-        let onConsole = dictionary["kCGSSessionOnConsoleKey"] as? Bool
-        return (
-            .resolve(
-                onConsole: onConsole,
-                screenLocked: dictionary["CGSSessionScreenIsLocked"] as? Bool
-            ),
-            onConsole == true
-        )
+        SystemConsoleSession.snapshot()
     }
 
     private func presentError(_ message: String) {

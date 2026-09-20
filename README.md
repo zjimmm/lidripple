@@ -128,7 +128,7 @@ case. This conservative fallback may skip the automatic opening animation.
 ## Install
 
 1. Open [Releases](https://github.com/zjimmm/lidripple/releases/latest) and download
-   `lidripple-1.0.0.dmg` from **Assets**.
+   `lidripple-1.0.1.dmg` from **Assets**.
 2. Open the DMG and drag **LidRipple** into **Applications**.
 3. Launch **LidRipple** from Applications. Use its menu-bar icon to select Fold or
    Ripple and follow the Screen Recording permission explanation. If macOS asks,
@@ -138,7 +138,7 @@ The app and DMG are Developer ID signed and notarized by Apple. There is no need
 to disable Gatekeeper or run a quarantine-removal command.
 
 For optional download verification, download the adjacent `.dmg.sha256` file into
-the same folder and run `shasum -a 256 -c lidripple-1.0.0.dmg.sha256` there.
+the same folder and run `shasum -a 256 -c lidripple-1.0.1.dmg.sha256` there.
 
 Version 1 is distributed as a DMG only. Homebrew support and its installation/
 uninstallation checks are deferred; no supported Homebrew install command is offered.
