@@ -1,6 +1,17 @@
 # v1.0.1 wake recovery candidate
 
-Release preparation; public artifact verification remains pending.
+Published as v1.0.1 on 2026-09-21.
+
+## Release verification
+
+- Source/tag: `485c5b22986f3640ab5a2b0f5437c7eb3f58ec1c`; CI run `35514213236` passed.
+- Universal app and DMG signed, accepted by Apple, stapled and validated.
+- Gatekeeper, entitlements, bundle/DMG contents, mounted-copy equality, launch
+  smoke and SHA-256 passed. Homebrew remains deferred under the DMG-only policy.
+- Anonymous public download matched local SHA-256:
+  `8278142895dc72281ec44ac9a2047e63ce85d98ef3f8ae72dd6670ae7604300b`.
+- Release: https://github.com/zjimmm/lidripple/releases/tag/v1.0.1
+- Existing v1.0.0 assets were not changed.
 
 ## Cause and change
 
